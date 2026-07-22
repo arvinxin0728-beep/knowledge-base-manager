@@ -1,0 +1,39 @@
+{
+  "name": "fixture-kb",
+  "version": 1,
+  "language": "en",
+  "source_libraries": {
+    "public_accounts": "/tmp/knowledge-base-manager-fixture/Sources/Public-Accounts"
+  },
+  "ai_knowledge_base": "/tmp/knowledge-base-manager-fixture/AI-Knowledge-Base",
+  "mapping": {
+    "system": "00-system",
+    "source_refinements": "10-source-refinements",
+    "topic_pages": "20-topic-pages",
+    "reusable_assets": "30-reusable-assets",
+    "outputs": "40-outputs"
+  },
+  "source_refinement_subdirs": {
+    "public_accounts": "public-accounts"
+  },
+  "topic_page_subdirs": {
+    "pages": "pages",
+    "moc": "moc"
+  },
+  "reusable_asset_subdirs": {
+    "methods": "methods",
+    "cases": "cases",
+    "expressions": "expressions",
+    "frameworks": "frameworks"
+  },
+  "output_subdirs": {
+    "feynman": "feynman-explanations",
+    "article_drafts": "article-drafts",
+    "solution_materials": "solution-materials",
+    "reviews": "reviews"
+  },
+  "promotion_rules": {
+    "min_sources_for_topic": 3,
+    "fact_check_before_public_output": true
+  }
+}

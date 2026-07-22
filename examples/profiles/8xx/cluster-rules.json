@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "default_min_sources": 3,
+  "clusters": [
+    {
+      "id": "ai-knowledge-management",
+      "name": "AI knowledge management and output system",
+      "question": "How can a knowledge base move from collection to reusable research outputs?",
+      "tags": [
+        "AI知识管理",
+        "知识管理",
+        "个人知识库",
+        "Obsidian",
+        "NotebookLM",
+        "Graphify",
+        "LLM Wiki",
+        "研究工作流",
+        "内容捕获",
+        "自动化工作流"
+      ],
+      "keywords": [
+        "knowledge base",
+        "knowledge management",
+        "Obsidian",
+        "Graphify",
+        "LLM Wiki",
+        "NotebookLM",
+        "知识库",
+        "知识管理"
+      ],
+      "asset_type": "methods",
+      "output_type": "feynman",
+      "risk": "medium",
+      "fact_check_required": true
+    },
+    {
+      "id": "agent-workspace",
+      "name": "Agent workspace and workflow governance",
+      "question": "How do agent tools become governable workspaces instead of isolated tool calls?",
+      "tags": [
+        "OpenClaw",
+        "Agent工作空间",
+        "技能系统",
+        "Agent Skill",
+        "工作流组合",
+        "AI工具治理",
+        "Claude Code",
+        "Agent调试",
+        "上下文工程"
+      ],
+      "keywords": [
+        "OpenClaw",
+        "Agent",
+        "Claude Code",
+        "workspace",
+        "skill",
+        "工作空间",
+        "技能"
+      ],
+      "asset_type": "methods",
+      "output_type": "solution_materials",
+      "risk": "medium",
+      "fact_check_required": true
+    },
+    {
+      "id": "structured-problem-solving",
+      "name": "Consulting methodology and structured problem solving",
+      "question": "How can consulting-style frameworks become a repeatable problem-solving workflow?",
+      "tags": [
+        "咨询方法论",
+        "问题解决",
+        "结构化思维",
+        "MECE",
+        "金字塔原理",
+        "系统思维",
+        "麦肯锡框架",
+        "市场细分",
+        "定价策略"
+      ],
+      "keywords": [
+        "MECE",
+        "金字塔",
+        "麦肯锡",
+        "问题解决",
+        "结构化",
+        "咨询"
+      ],
+      "asset_type": "methods",
+      "output_type": "solution_materials",
+      "risk": "medium",
+      "fact_check_required": true
+    },
+    {
+      "id": "tob-crm-customer-growth",
+      "name": "ToB sales, CRM, and customer growth assets",
+      "question": "How can ToB companies turn cases, sales communication, and CRM/SCRM into growth assets?",
+      "tags": [
+        "ToB销售",
+        "方案销售",
+        "客户沟通",
+        "客户案例",
+        "销售背书",
+        "CRM",
+        "SCRM",
+        "企业微信CRM",
+        "销售管理",
+        "AI质检"
+      ],
+      "keywords": [
+        "ToB",
+        "CRM",
+        "SCRM",
+        "客户案例",
+        "销售",
+        "方案"
+      ],
+      "asset_type": "methods",
+      "output_type": "solution_materials",
+      "risk": "high",
+      "fact_check_required": true
+    },
+    {
+      "id": "ai-native-organization",
+      "name": "AI-native organization and digital transformation",
+      "question": "How can an organization judge whether it is ready for AI-native transformation?",
+      "tags": [
+        "AI Native组织",
+        "组织AI转型",
+        "组织AI准备度",
+        "数字化转型",
+        "经营分析",
+        "HR转型",
+        "组织设计",
+        "人机协同"
+      ],
+      "keywords": [
+        "AI Native",
+        "组织",
+        "数字化转型",
+        "经营分析",
+        "HR",
+        "人机协同"
+      ],
+      "asset_type": "frameworks",
+      "output_type": "solution_materials",
+      "risk": "high",
+      "fact_check_required": true
+    }
+  ]
+}

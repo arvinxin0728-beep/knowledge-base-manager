@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "clusters": [
+    {
+      "id": "ai-knowledge-management",
+      "name": "AI知识管理",
+      "moc": "AI知识管理-MOC",
+      "tags": ["知识管理", "AI知识管理", "Obsidian", "输出系统"],
+      "keywords": ["知识库", "知识管理", "Obsidian", "主题晋升", "Graphify", "LLM Wiki"]
+    },
+    {
+      "id": "agent-workspace",
+      "name": "Agent工作流",
+      "moc": "Agent工作流-MOC",
+      "tags": ["AI工作流", "Agent", "工作空间"],
+      "keywords": ["OpenClaw", "Agent", "工作空间", "Claude", "技能", "Skill"]
+    },
+    {
+      "id": "structured-problem-solving",
+      "name": "咨询方法论",
+      "moc": "咨询方法论-MOC",
+      "tags": ["咨询方法论", "结构化思维", "问题解决"],
+      "keywords": ["咨询", "结构化", "麦肯锡", "MECE", "金字塔"]
+    },
+    {
+      "id": "tob-crm-customer-growth",
+      "name": "ToB客户经营",
+      "moc": "ToB客户经营-MOC",
+      "tags": ["ToB增长", "CRM", "客户经营"],
+      "keywords": ["ToB", "CRM", "SCRM", "客户", "销售"]
+    },
+    {
+      "id": "ai-native-organization",
+      "name": "AI组织转型",
+      "moc": "AI组织转型-MOC",
+      "tags": ["组织转型", "AI Native", "数字化转型"],
+      "keywords": ["AI Native", "组织", "数字化转型", "经营分析", "HR"]
+    }
+  ]
+}
