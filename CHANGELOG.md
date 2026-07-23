@@ -6,6 +6,38 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [0.1.0-beta] - 2026-07-22
 
+## [0.1.1] - 2026-07-23
+
+### Added
+
+- Gate-10 source refinement quality gate with structural, content integrity, and batch-level model-text repetition checks.
+- `python3 scripts/kb_manager.py gate-10 --config <cfg> [--strict] [--apply]` CLI command.
+- Quality rules section in `kb-config.json`: `quality.template_patterns`, `quality.boilerplate_topics`, `quality.batch_model_repeat_threshold` — replaces hardcoded domain-specific patterns.
+- Auto-discovered cluster scoring: `has_question`, `has_reuse`, and `has_output` dimensions now inferred from source topics, not only from pre-configured cluster rules.
+- `backup_file()` helper with configurable retention (default 5 copies) and `append_operation_log()` for `run-log.jsonl`.
+- Two new pipeline reconciliation tests: path alias recovery and blank output repair.
+
+### Changed
+
+- `00-system/` directory restructured into `active/` (current state), `reports/` (regenerable snapshots), and `backups/` (auto-rotating).
+- `system_file()` now routes to subdirectories with automatic fallback to old flat layout for existing knowledge bases.
+- `ensure_system_files()` creates `active/`, `reports/`, `backups/` subdirectories and writes defaults to the correct subdirectory.
+- `build_cluster()` scoring fixed: `risk_controlled` no longer always `True` for high-risk clusters (`verification_required` defaults to `False`).
+- `build_cluster()` has_reuse fallback threshold lowered from 5 to `min_sources * 2`; has_output gains an equivalent fallback.
+- `package-lint` README freshness check changed from `st_mtime` comparison to content SHA-256 comparison with `.source_hash` manifest; `--apply` writes hash on pass.
+- `cmd_run --apply` now runs `gate-10` alongside existing quality-gate and promotion stages.
+- Pipeline `reconcile_processed_index()` supports path alias resolution, SHA-256 content-hash fallback, and automatic repair of legacy blank output paths.
+- Refined `check_refinement()` fixing 4 incorrect `"\\n"` escape sequences and removing a duplicate `split_frontmatter()` definition.
+
+### Fixed
+
+- `risk_controlled` scoring bug: `verification_required` default `True` → `False`, no longer grants automatic points to high-risk clusters.
+- Auto-discovered clusters no longer score 2/5 with 1 point wasted on a bug; now reach 5/5 with content-aware inference.
+- `split_frontmatter()` duplicate definition: new yaml-based version was shadowed by older manual parser.
+- `check_refinement()` newline splitting: `core.split("\\n")` and `body.replace("\\n")` used literal backslash-n instead of actual newlines.
+- `ensure_system_files()` wrote to old flat paths instead of new subdirectories, causing `promote --apply` to fail with `FileNotFoundError`.
+- `test_kb_manager.py`: `promotion-decision.jsonl` path updated to `00-system/active/` and `package-lint` test now passes with content-hash checking.
+
 ### Added
 
 - Initial public beta package for `knowledge-base-manager`.
@@ -21,6 +53,7 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 - Promotion stubs are written only under the system stub area, not directly into formal topic pages, reusable assets, or outputs.
 - README synchronization is now a release requirement checked by `package-lint --strict`.
+- Source discovery now reconciles path aliases and legacy index records with blank output paths when the canonical refinement exists, while refusing title-only deduplication.
 
 ### Known Limitations
 

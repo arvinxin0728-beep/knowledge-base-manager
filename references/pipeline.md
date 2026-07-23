@@ -59,6 +59,53 @@ python3 scripts/kb_pipeline.py --config <config> submit \
   --refinement <note.md> --metadata <metadata.json>
 ```
 
+
+## Quality Gate (Gate-10)
+
+Before committing, all refinements must pass the gate-10 quality check.
+Run it against the batch or all current refinements:
+
+```bash
+python3 scripts/kb_manager.py gate-10 --config <config>
+```
+
+The gate performs three categories of check:
+
+**Batch-level (hard block):**
+- Model-text repetition rate above threshold (default 30%).
+  If 30%+ of refinements in the same batch share an identical "可复用模型",
+  the AI is likely template-filling instead of reading source material.
+
+**Per-file blockers (must-fix):**
+- Core points are all template boilerplate (AI did not extract actual content).
+- Model text matches a known fabrication pattern.
+- Connected topics are the generic boilerplate set (>=4 of the 6 common fake topics).
+- Case text matches a known fabrication pattern.
+- Missing essential sections (一句话价值, 核心观点, 可连接主题).
+
+**Per-file warnings (review recommended, not blocking):**
+- Missing optional sections (可复用案例, 可复用模型, 候选提升).
+- Empty related_sources (acceptable for early/singleton sources).
+- Generic theme_cluster (AI知识管理, 未归类).
+
+Pass the gate with `--strict` to exit non-zero on failure:
+
+```bash
+python3 scripts/kb_manager.py gate-10 --config <config> --strict --apply
+```
+
+The `--apply` flag writes a `gate-10.md` report to the system directory.
+
+**Do not run `commit-ready` until gate-10 passes.** If the gate reports
+blockers, fix or redo the flagged refinements before committing.
+
+To re-gate a specific batch, use:
+
+```bash
+python3 scripts/kb_manager.py gate-10 --config <config> --batch <batch-name>
+```
+
+
 Commit all validated staged results:
 
 ```bash
@@ -116,6 +163,7 @@ For Chinese knowledge bases, preserve the original source title and use the esta
 - Never write `processed-index.jsonl` manually while the pipeline is active.
 - Treat `commit` and `commit-ready` as the only completion boundary.
 - Re-run `prepare`; discovery and extraction are idempotent for unchanged files.
+- During discovery, reconcile legacy index records by resolved source path first and unique content hash second. If a legacy record has an empty output path, adopt the canonical destination only when that refinement file already exists; never deduplicate by title alone.
 - Do not delete `<system>/runtime` while work is in progress.
 - Use `cleanup` instead of manually deleting artifact directories. Keep a nonzero retention period for live knowledge bases.
 - Back up the knowledge base, including the SQLite database, before migrations.

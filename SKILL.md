@@ -243,6 +243,7 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `audit-relations`: inspect 20/30/40 relationship integrity and unresolved wikilinks.
 - `audit-portability`: inspect 20/30/40 artifact bodies for user-specific implementation leakage that should not appear in portable methods or outputs.
 - `audit-topic-pages`: inspect topic pages for required knowledge-page sections and placeholder/process-only structure-review text.
+- `gate-10`: run source-refinement quality gate. Three categories: structural completeness (missing sections), content integrity (template boilerplate, metadata pollution, fabrication patterns), and batch-level model-text repetition. Use `--strict` to exit non-zero on failure. `--apply` writes `gate-10.md` to system reports.
 - `quality-gate`: combine relation, portability, topic-page, asset, output-quality, and verification checks into one pass/fail result; use `--strict` to fail on blockers.
 - `package-lint`: inspect the skill package itself for release-blocking portability and packaging issues.
 - `verification-queue`: scan processed notes, topic pages, and outputs for high-risk claims and write a verification queue.
@@ -254,6 +255,16 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `run`: execute all safe deterministic maintenance stages and report the next cognitive action; use `--apply` to write reports.
 - `kb_pipeline.py`: maintain the SQLite task ledger and run recoverable processing, storage inspection, legacy-to-local runtime migration, recoverable legacy retirement, and safe artifact cleanup. Keep runtime data device-local for new installations; preserve legacy behavior until an explicit verified migration. Cleanup and migration default to dry-run.
 - `obsidian_linker.py`: add Obsidian frontmatter, stable tags, wikilinks, relation sections, and MOC pages for source refinements, topic pages, reusable assets, and outputs.
+
+### System Files
+
+State and report files under `00-system/` are organized into subdirectories:
+
+- `active/` — current working state: `processed-index.jsonl`, `run-log.jsonl`, `active-run-state.json`, `verification-queue.jsonl`, etc.
+- `reports/` — regenerable snapshots: `topic-clusters.md`, `promotion-review.md`, `quality-gate.md`, `gate-10.md`, etc.
+- `backups/` — auto-archived previous versions (max 5 per file, oldest pruned).
+
+The `backup_file()` helper archives any file under `backups/` with a timestamp suffix and keeps only the latest `max_backups` copies. `append_operation_log()` writes one structured record to `active/run-log.jsonl` per `--apply` command (command name, timestamp, summary, counts).
 
 Read `references/schema.md`, `references/verification.md`, `references/output-evaluation.md`, and `references/obsidian-linking.md` when using these commands.
 
@@ -273,6 +284,7 @@ Before finalizing work:
 10. When work stops before completion, record the latest stage, completed steps, pending steps, and next safe action in the mapped system directory.
 11. Run `audit-portability` after creating or revising 20/30/40 artifacts. Treat any issue in portable artifact bodies as a defect, not a style preference.
 12. Run `audit-topic-pages` after creating, splitting, renaming, or restructuring topic pages. A topic page that only explains a split, migration, or file organization change is not a valid topic page.
+12. Run `gate-10 --strict` before committing source refinements. Blockers must be fixed; batch-level issues indicate template filling.
 13. Run `quality-gate --strict` before declaring a 20/30/40 generation or restructuring task complete. Blockers must be fixed or explicitly left as unfinished work.
 14. Run `package-lint --strict` before presenting the skill as installable by other users.
 15. For high-risk output claims, run `verification-queue`, record results with `verify-claim`, then refresh `verification-status`; unresolved output verification is a completion blocker.

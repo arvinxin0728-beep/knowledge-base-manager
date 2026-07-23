@@ -312,33 +312,60 @@ def reconcile_processed_index(cfg: dict[str, Any], db: sqlite3.Connection) -> in
     index = system_dir(cfg) / "processed-index.jsonl"
     if not index.exists():
         return 0
-    records: dict[str, dict[str, Any]] = {}
-    for line in index.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    rows = index_rows(index)
+    records_by_path: dict[str, dict[str, Any]] = {}
+    records_by_hash: dict[str, list[dict[str, Any]]] = {}
+    for record in rows:
         source = record.get("source_path") or record.get("source_file")
-        output = record.get("output_file") or record.get("refinement_file")
-        if not source or not output or not Path(output).exists():
-            continue
-        records[str(Path(source).expanduser().resolve())] = record
+        if source:
+            records_by_path[str(Path(source).expanduser().resolve())] = record
+        recorded_sha = record.get("source_sha256") or record.get("sha256")
+        if recorded_sha:
+            records_by_hash.setdefault(recorded_sha, []).append(record)
     reconciled = 0
-    for row in db.execute("SELECT * FROM jobs WHERE state='discovered'").fetchall():
-        record = records.get(row["source_path"])
+    index_changed = False
+    for row in db.execute("SELECT * FROM jobs WHERE state!='committed'").fetchall():
+        source_sha = None
+        record = records_by_path.get(row["source_path"])
+        if record is None and records_by_hash:
+            source_sha = sha256_file(Path(row["source_path"]))
+            hash_matches = records_by_hash.get(source_sha, [])
+            if len(hash_matches) == 1:
+                record = hash_matches[0]
         if not record:
             continue
         recorded_sha = record.get("source_sha256") or record.get("sha256")
-        if recorded_sha and sha256_file(Path(row["source_path"])) != recorded_sha:
+        if recorded_sha:
+            source_sha = source_sha or sha256_file(Path(row["source_path"]))
+        if recorded_sha and source_sha != recorded_sha:
             continue
+        output_value = record.get("output_file") or record.get("refinement_file")
+        output = Path(output_value).expanduser() if output_value else refinement_destination(cfg, row)
+        if not output.is_file():
+            continue
+        canonical_output = str(output.resolve())
+        canonical_sha = recorded_sha or source_sha or sha256_file(Path(row["source_path"]))
         db.execute(
             "UPDATE jobs SET state='committed',source_sha256=?,refinement_file=?,committed_at=?,updated_at=? WHERE job_id=?",
-            (recorded_sha or None, record.get("output_file") or record.get("refinement_file"), record.get("processed_at") or now(), now(), row["job_id"]),
+            (canonical_sha, canonical_output, record.get("processed_at") or now(), now(), row["job_id"]),
         )
-        event(db, row["job_id"], "reconciled_from_index", "discovered", "committed")
+        event(db, row["job_id"], "reconciled_from_index", row["state"], "committed", {"output_file": canonical_output})
+        canonical_fields = {
+            "schema_version": 1,
+            "source_id": row["job_id"],
+            "source_path": row["source_path"],
+            "source_sha256": canonical_sha,
+            "source_type": row["source_type"],
+            "title": record.get("title") or row["title"],
+            "output_file": canonical_output,
+            "status": "processed",
+        }
+        if any(record.get(key) != value for key, value in canonical_fields.items()):
+            record.update(canonical_fields)
+            index_changed = True
         reconciled += 1
+    if index_changed:
+        atomic_write(index, "".join(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n" for item in rows))
     return reconciled
 
 

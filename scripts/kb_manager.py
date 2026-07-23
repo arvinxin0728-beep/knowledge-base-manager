@@ -50,6 +50,27 @@ DEFAULT_REUSABLE_ASSET_SUBDIRS = {
 
 SOURCE_EXTS = {".md", ".markdown", ".txt", ".html", ".htm", ".pdf", ".epub", ".docx"}
 SKILL_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_HASH_PATH = SKILL_ROOT / ".source_hash"
+
+
+def _tracked_package_files() -> list[Path]:
+    files = sorted([p for p in SKILL_ROOT.rglob("*") if p.is_file()], key=lambda p: str(p))
+    return [
+        p for p in files
+        if p.name != "README.md"
+        and p.suffix.lower() in {".md", ".json", ".yaml", ".yml", ".py", ".rb"}
+        and not str(p.relative_to(SKILL_ROOT)).startswith("tests/")
+        and "__pycache__" not in p.parts
+    ]
+
+
+def _source_content_hash(tracked: list[Path]) -> str:
+    h = hashlib.sha256()
+    for p in sorted(tracked, key=str):
+        h.update(p.read_bytes())
+    return h.hexdigest()
+
+
 INDEX_FIELDS = [
     "schema_version",
     "source_id",
@@ -109,6 +130,18 @@ def config_defaults() -> dict[str, Any]:
         },
         "integrations": {"obsidian": {"enabled": False}},
         "pipeline": {"chunk_size": 5000, "default_batch_size": 10, "max_attempts": 3, "lease_minutes": 120, "runtime_storage": "legacy", "artifact_retention_days": 7},
+        "quality": {
+            "template_patterns": [
+                r"任务定义\s*->\s*工具/Skill 封装\s*->\s*权限与数据接入\s*->\s*自动执行\s*->\s*复盘迭代",
+                r"材料倾向于把 AI 能力包装为可执行流程或可复用 Skill",
+                r"解决如何把一个具体任务拆成 Agent、工具、权限、输入输出和执行链路的问题",
+                r"材料将问题拆解、结构表达或模型复用作为核心",
+                r"可作为 Agent/Skill 场景库案例",
+                r"文章的结构线索集中在",
+            ],
+            "boilerplate_topics": ["Agent工作流", "Skill设计", "自动化系统", "内容生产", "表达写作", "AI写作"],
+            "batch_model_repeat_threshold": 0.3,
+        },
     }
 HIGH_RISK_PATTERNS = {
     "market_data": r"市场规模|增长率|同比|环比|渗透率|GMV|收入|利润|财报|业绩",
@@ -183,16 +216,92 @@ def topic_pages_moc_dir(cfg: dict[str, Any]) -> Path:
 
 
 def system_file(cfg: dict[str, Any], name: str) -> Path:
-    return kb_path(cfg, "system") / name
+    root = kb_path(cfg, "system")
+    if name in _SYSTEM_ACTIVE_FILES:
+        p = root / "active" / name
+        if p.exists():
+            return p
+        fallback = root / name
+        if fallback.exists():
+            return fallback
+        return p
+    if name in _SYSTEM_REPORT_FILES:
+        p = root / "reports" / name
+        if p.exists():
+            return p
+        fallback = root / name
+        if fallback.exists():
+            return fallback
+        return p
+    return root / name
+
+
+_SYSTEM_ACTIVE_FILES = {
+    'processed-index.jsonl', 'active-run-state.json', 'run-log.jsonl',
+    'promotion-decision.jsonl', 'verification-queue.jsonl',
+    'verification-results.jsonl', 'output-review-results.jsonl',
+    'kb-config.json', 'obsidian-taxonomy.json', 'rules.md', 'topics.md',
+}
+
+_SYSTEM_REPORT_FILES = {
+    'topic-clusters.md', 'promotion-review.md', 'asset-output-candidates.md',
+    'quality-gate.md', 'gate-10.md', 'verification-status.md',
+    'output-quality-review.md', 'output-review-status.md',
+    'portability-audit.md', 'topic-page-audit.md', 'relation-audit.md',
+    'asset-relation-audit.md', 'inbox-review.md',
+}
 
 
 def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+
+def backup_file(path: Path, max_backups: int = 5) -> Path | None:
+    """Create a timestamped backup under <parent>/backups/, keeping only max_backups."""
+    if not path.exists():
+        return None
+    backups_dir = path.parent / "backups"
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = backups_dir / f"{path.name}.{timestamp}"
+    shutil.copy2(path, backup_path)
+    
+    # Prune to max_backups
+    existing = sorted(backups_dir.glob(f"{path.name}.*"))
+    while len(existing) > max_backups:
+        oldest = existing.pop(0)
+        oldest.unlink(missing_ok=True)
+    
+    return backup_path
+
+
+
+def append_operation_log(cfg: dict[str, Any], command: str, summary: str, counts: dict[str, Any] | None = None, error: str | None = None) -> None:
+    """Append one operation record to run-log.jsonl in active/."""
+    log = system_file(cfg, "run-log.jsonl")
+    record = {
+        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "command": command,
+        "summary": summary,
+        "counts": counts or {},
+    }
+    if error:
+        record["error"] = error
+    try:
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"Warning: failed to write operation log: {e}", file=sys.stderr)
+
+
 def ensure_system_files(cfg: dict[str, Any]) -> None:
     system = kb_path(cfg, "system")
     system.mkdir(parents=True, exist_ok=True)
+    (system / "active").mkdir(parents=True, exist_ok=True)
+    (system / "reports").mkdir(parents=True, exist_ok=True)
+    (system / "backups").mkdir(parents=True, exist_ok=True)
     defaults = {
         "processed-index.jsonl": "",
         "topics.md": "# Topic Index\n\n## Current topic candidates\n\n",
@@ -226,7 +335,7 @@ def ensure_system_files(cfg: dict[str, Any]) -> None:
         ),
     }
     for name, content in defaults.items():
-        p = system / name
+        p = system_file(cfg, name)
         if not p.exists():
             p.write_text(content, encoding="utf-8")
 
@@ -379,6 +488,274 @@ def audit(cfg: dict[str, Any], include_hashes: bool = False) -> dict[str, Any]:
     }
 
 
+KNOWN_TEMPLATE_PATTERNS = [
+    r"任务定义\s*->\s*工具/Skill 封装\s*->\s*权限与数据接入\s*->\s*自动执行\s*->\s*复盘迭代",
+    r"材料倾向于把 AI 能力包装为可执行流程或可复用 Skill",
+    r"解决如何把一个具体任务拆成 Agent、工具、权限、输入输出和执行链路的问题",
+    r"材料将问题拆解、结构表达或模型复用作为核心",
+    r"可作为 Agent/Skill 场景库案例",
+    r"文章的结构线索集中在",
+]
+
+REFINEMENT_PROBLEM_SECTIONS = ["文章解决的问题", "文章/书籍解决的问题"]
+
+
+def extract_sections(text: str) -> dict[str, str]:
+    sections: dict[str, str] = {}
+    current_key = None
+    current_lines: list[str] = []
+    for line in text.split("\n"):
+        m = re.match(r"^##\s+(.+)$", line)
+        if m:
+            if current_key and current_lines:
+                sections[current_key] = "\n".join(current_lines).strip()
+            current_key = m.group(1).strip().rstrip(":")
+            current_lines = []
+        elif current_key:
+            current_lines.append(line)
+    if current_key and current_lines:
+        sections[current_key] = "\n".join(current_lines).strip()
+    return sections
+
+
+def check_refinement(path: Path, known_templates: list[str] | None = None) -> dict[str, Any]:
+    return _check_refinement(path, known_templates, None)
+
+
+BOILERPLATE_TOPICS_DEFAULT = frozenset({"Agent工作流", "Skill设计", "自动化系统", "内容生产", "表达写作", "AI写作"})
+
+
+def _check_refinement(path: Path, known_templates: list[str] | None = None, boilerplate_topics: set[str] | None = None) -> dict[str, Any]:
+    """Run structural and content checks on a single refinement file.
+    
+    Returns blockers (must-fix) and warnings (informational).
+    """
+    if boilerplate_topics is None:
+        boilerplate_topics = BOILERPLATE_TOPICS_DEFAULT
+    blockers: list[str] = []
+    warnings: list[str] = []
+    try:
+        text = path.read_text("utf-8", errors="replace")
+    except Exception as e:
+        return {"file": str(path), "passed": False, "blockers": [f"unreadable: {e}"], "warnings": [], "issues": [f"unreadable: {e}"]}
+
+    meta, body = split_frontmatter(text)
+    sections = extract_sections(body)
+
+    has_problem = any(key in sections for key in REFINEMENT_PROBLEM_SECTIONS)
+    if not has_problem:
+        blockers.append(f"missing_problem_section (expected one of: {', '.join(REFINEMENT_PROBLEM_SECTIONS)})")
+
+    for section in ["一句话价值", "核心观点", "可连接主题"]:
+        if section not in sections:
+            blockers.append(f"missing_section: {section}")
+
+    # 可复用模型 and 候选提升 are important but may be absent
+    for section in ["可复用模型", "候选提升"]:
+        if section not in sections:
+            warnings.append(f"missing_section: {section}")
+
+    # 可复用案例 is optional - not every source has one
+    if "可复用案例" not in sections:
+        warnings.append("missing_section: 可复用案例")
+
+    # related_sources being empty is a warning, not a blocker
+    related = meta.get("related_sources", [])
+    if isinstance(related, list) and len(related) == 0:
+        warnings.append("empty_related_sources")
+
+    # theme_cluster generic is a warning
+    cluster = meta.get("theme_cluster", "")
+    if cluster in ("AI知识管理", "未归类"):
+        warnings.append(f"generic_theme_cluster: {cluster}")
+
+    # Content: core points boilerplate check
+    core = sections.get("核心观点", "")
+    core_lines = [l for l in core.split("\n") if l.strip()]
+    if not core_lines:
+        blockers.append("empty_core_points")
+    else:
+        template_hits = 0
+        for line in core_lines:
+            if any(re.search(ptn, line) for ptn in (known_templates or KNOWN_TEMPLATE_PATTERNS)):
+                template_hits += 1
+        if template_hits == len(core_lines):
+            blockers.append("all_core_points_are_template_boilerplate")
+
+    # Content: 可复用模型 should not be template
+    model_text = sections.get("可复用模型", "")
+    if model_text:
+        for ptn in (known_templates or KNOWN_TEMPLATE_PATTERNS):
+            if re.search(ptn, model_text):
+                blockers.append("template_model_text")
+                break
+
+    # Content: 可连接主题 should not be generic boilerplate set
+    connected = sections.get("可连接主题", "")
+    if connected:
+        topic_items = {line.strip().lstrip("- ").strip() for line in connected.split("\n") if line.strip() and line.strip().lstrip("- ").strip()}
+        overlap = topic_items & boilerplate_topics
+        if len(overlap) >= 4:
+            blockers.append("generic_connected_topics_ge_4_boilerplate")
+
+    # Content: 可复用案例 should not be template
+    case_text = sections.get("可复用案例", "")
+    if case_text:
+        for ptn in (known_templates or KNOWN_TEMPLATE_PATTERNS):
+            if re.search(ptn, case_text):
+                blockers.append("template_case_text")
+                break
+
+    # --- Depth: 核心观点 should have substantive detail ---
+    core = sections.get("核心观点", "")
+    if core:
+        core_lines = [l.strip() for l in core.split("\n") if l.strip() and not l.strip().startswith("!") and not l.strip().startswith("[") and len(l.strip()) > 10]
+        # Check: at least 2 substantive bullet points
+        bullet_count = sum(1 for l in core.split("\n") if re.match(r'^\s*[\d\.\-]', l) and len(l.strip()) > 30)
+        if bullet_count == 0 and len(core_lines) <= 1:
+            warnings.append("shallow_core_points: no substantive bullets found")
+        # Check: core points are not just extracted metadata lines
+        first_bullet = ""
+        for l in core.split("\n"):
+            l = l.strip()
+            if l.startswith(("1.", "2.", "3.", "4.", "5.", "- ")) and len(l) > 15:
+                first_bullet = l
+                break
+        if first_bullet and re.match(r'^[\d\.-]+\s*(url|https?|http|id|created_at|source_file|author)', first_bullet, re.I):
+            blockers.append("metadata_in_core_points: core points contain metadata instead of article content")
+        elif not first_bullet:
+            warnings.append("shallow_core_points: no substantive bullet points found")
+    
+    # --- Depth: 可复用模型 should be specific, not generic one-liner ---
+    model_text = sections.get("可复用模型", "")
+    if model_text and len(model_text.strip()) < 40:
+        warnings.append("shallow_model: model text too short (< 40 chars)")
+    elif model_text and len(model_text.strip()) < 20:
+        blockers.append("too_short_model: model text is < 20 chars")
+
+    # --- Depth: total refinement should have meaningful content ---
+    total_body_len = len(body.replace("\n", " ").strip()) if body else 0
+    if total_body_len < 200:
+        warnings.append(f"shallow_refinement: only {total_body_len} chars of body content")
+
+    return {
+        "file": str(path),
+        "passed": len(blockers) == 0,
+        "issues": blockers + warnings,
+        "blockers": blockers,
+        "warnings": warnings,
+        "theme_cluster": meta.get("theme_cluster", ""),
+    }
+
+def gate_10(cfg: dict[str, Any], batch_name: str | None = None, batch_threshold: float = 0.3, known_templates: list[str] | None = None) -> dict[str, Any]:
+    src_root = kb_path(cfg, "source_refinements")
+    if not src_root.exists():
+        return {"passed": False, "batch": batch_name, "scanned": 0, "error": "source_refinements_dir_not_found"}
+
+    files = collect_markdown_files(src_root)
+    quality_cfg = cfg.get("quality", {})
+    if known_templates is None:
+        known_templates = quality_cfg.get("template_patterns", KNOWN_TEMPLATE_PATTERNS)
+    boilerplate_set = set(quality_cfg.get("boilerplate_topics", list(BOILERPLATE_TOPICS_DEFAULT)))
+    batch_threshold = batch_threshold or quality_cfg.get("batch_model_repeat_threshold", 0.3)
+
+    results = []
+    for f in files:
+        result = _check_refinement(f, known_templates, boilerplate_set)
+        results.append(result)
+
+    total = len(results)
+    failures = [r for r in results if not r["passed"]]
+    passed_count = total - len(failures)
+    blocker_count = sum(len(r.get("blockers", [])) for r in results)
+
+    model_texts: list[str] = []
+    for f in files:
+        try:
+            text = f.read_text("utf-8", errors="replace")
+            _, body = split_frontmatter(text)
+            sections = extract_sections(body)
+            model_texts.append(sections.get("可复用模型", "").strip())
+        except Exception:
+            model_texts.append("")
+
+    model_counter: dict[str, int] = {}
+    for t in model_texts:
+        if t.strip():
+            model_counter[t.strip()] = model_counter.get(t.strip(), 0) + 1
+
+    batch_issues: list[str] = []
+    repeat_rate = 0.0
+    if model_counter and total > 0:
+        most_common_text = max(model_counter, key=model_counter.get)
+        most_common_count = model_counter[most_common_text]
+        repeat_rate = most_common_count / total
+        if repeat_rate >= batch_threshold:
+            snippet = most_common_text[:60].replace("\n", " ")
+            batch_issues.append(f"model_text_repeat_rate_{repeat_rate:.0%} ({most_common_count}/{total} files share '{snippet}...')")
+
+    return {
+        "passed": len(failures) == 0 and not batch_issues,
+        "batch": batch_name or "all",
+        "batch_threshold": batch_threshold,
+        "scanned": total,
+        "passed_count": passed_count,
+        "failed_count": len(failures),
+        "failures": failures,
+        "blocker_count": blocker_count,
+        "batch_model_repeat_rate": round(repeat_rate, 4),
+        "batch_issues": batch_issues,
+        "gate": "10",
+    }
+
+
+
+def render_gate_10(result: dict[str, Any]) -> str:
+    lines = [
+        "# Gate-10: Source Refinement Quality",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        f"batch: {result['batch']}",
+        f"status: {'passed' if result['passed'] else 'blocked'}",
+        f"scanned: {result['scanned']}",
+        f"passed: {result['passed_count']}",
+        f"failed: {result['failed_count']}",
+        f"blocker_issues: {result.get('blocker_count', 0)}",
+        f"batch_model_repeat_rate: {result['batch_model_repeat_rate']:.0%}",
+        "---",
+        "",
+    ]
+    if result["batch_issues"]:
+        lines.append("## Batch-Level Issues")
+        for issue in result["batch_issues"]:
+            lines.append(f"- {issue}")
+        lines.append("")
+    if result["failures"]:
+        # Separate blocker-only failures from warning-only failures
+        blocker_failures = [f for f in result["failures"] if f.get("blockers")]
+        warning_failures = [f for f in result["failures"] if not f.get("blockers") and f.get("warnings")]
+        if blocker_failures:
+            lines.append("## Blockers (must fix before commit)")
+            for f in blocker_failures:
+                lines.append(f"- {f['file']}: {', '.join(f.get('blockers', []))}")
+            lines.append("")
+        if warning_failures:
+            lines.append("## Warnings (review recommended, not blocking)")
+            for f in warning_failures:
+                w = f.get("warnings", f.get("issues", []))
+                lines.append(f"- {f['file']}: {', '.join(w[:5])}")
+            lines.append("")
+    if result["passed"]:
+        lines.append("## Result: PASSED")
+    else:
+        lines.append("## Result: BLOCKED --- fix blocker issues and/or batch issues before committing")
+    return "\n".join(lines).rstrip() + "\n"
+
+_REUSE_KEYWORDS = frozenset({"方法", "方法论", "工作流", "框架", "模板", "practice", "workflow", "framework", "template", "pipeline", "method", "pattern"})
+_OUTPUT_KEYWORDS = frozenset({"输出", "写作", "表达", "报告", "解释", "方案", "write", "output", "explain", "report", "draft", "article", "feynman"})
+
+
 def load_cluster_rules(path: Path | None) -> dict[str, Any]:
     if path and path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
@@ -421,11 +798,22 @@ def build_cluster(rule: dict[str, Any], members: list[dict[str, Any]], rules: di
     min_sources = int(rule.get("min_sources") or rules.get("default_min_sources") or 3)
     source_count = len(members)
     risk = rule.get("risk", "medium")
-    has_question = bool(rule.get("question")) and not bool(rule.get("auto_discovered"))
+    is_auto = bool(rule.get("auto_discovered"))
+    has_question = bool(rule.get("question"))
+    if is_auto and not has_question and source_count >= min_sources:
+        has_question = True
     asset_type = rule.get("asset_type") or "unclassified"
     has_reuse = asset_type != "unclassified" or bool(rule.get("reusable_asset"))
+    if is_auto and not has_reuse:
+        all_topics = {t.lower() for m in members for t in m.get("topics", [])}
+        if all_topics & _REUSE_KEYWORDS or source_count >= min_sources * 2:
+            has_reuse = True
     has_output = bool(rule.get("output_type") or rule.get("output_intent") or rule.get("active_project"))
-    risk_controlled = risk != "high" or bool(rule.get("verification_required", True))
+    if is_auto and not has_output:
+        all_topics = {t.lower() for m in members for t in m.get("topics", [])}
+        if all_topics & _OUTPUT_KEYWORDS or source_count >= min_sources * 2:
+            has_output = True
+    risk_controlled = risk != "high" or bool(rule.get("verification_required", False))
     score = 0
     score += 1 if source_count >= min_sources else 0
     score += 1 if has_question else 0
@@ -1574,26 +1962,21 @@ def package_lint() -> dict[str, Any]:
             "source_libraries",
             "跨平台使用",
             "脚本模式",
-            "v0.1.0-beta",
+            "v0.1.1",
             "package-lint --strict",
         ]
         for term in required_readme_terms:
             if term not in readme_text:
                 issues.append({"file": "README.md", "issue": "readme_missing_required_section", "term": term})
-        tracked_for_readme = [
-            p for p in files
-            if p.name != "README.md"
-            and p.suffix.lower() in {".md", ".json", ".yaml", ".yml", ".py", ".rb"}
-            and not str(p.relative_to(SKILL_ROOT)).startswith("tests/")
-            and "__pycache__" not in p.parts
-        ]
-        if tracked_for_readme:
-            newest = max(tracked_for_readme, key=lambda p: p.stat().st_mtime)
-            if readme.stat().st_mtime + 1 < newest.stat().st_mtime:
+        tracked = _tracked_package_files()
+        if tracked:
+            current_hash = _source_content_hash(tracked)
+            ref_hash = SOURCE_HASH_PATH.read_text(encoding="utf-8").strip() if SOURCE_HASH_PATH.exists() else current_hash
+            if current_hash and ref_hash and current_hash != ref_hash:
                 issues.append({
                     "file": "README.md",
                     "issue": "readme_older_than_skill_sources",
-                    "newest_source": str(newest.relative_to(SKILL_ROOT)),
+                    "newest_source": "source files changed since README was last verified",
                 })
     for p in files:
         rel = str(p.relative_to(SKILL_ROOT))
@@ -1656,12 +2039,12 @@ def cmd_normalize_index(args: argparse.Namespace) -> None:
     duplicates = [source_id for source_id, count in seen.items() if count > 1]
     result = {"input_rows": len(rows), "parse_errors": errors, "duplicate_source_ids": duplicates, "fields": INDEX_FIELDS}
     if args.apply:
-        backup = index.with_suffix(index.suffix + f".bak-{date.today().isoformat()}")
-        if index.exists() and not backup.exists():
-            shutil.copy2(index, backup)
+        backup = backup_file(index)
         write_jsonl(index, normalized)
         result["written"] = str(index)
-        result["backup"] = str(backup)
+        result["backup"] = str(backup) if backup else None
+        append_operation_log(cfg, "normalize-index", f"Normalized {len(normalized)} rows, {len(result.get('parse_errors', []))} errors", 
+                             {"rows": len(normalized), "errors": len(result.get('parse_errors', []))})
     else:
         if args.out:
             write_jsonl(args.out, normalized)
@@ -1699,6 +2082,8 @@ def cmd_promote(args: argparse.Namespace) -> None:
         result["checkpoint"] = str(system_file(cfg, "active-run-state.json"))
         if args.create_stubs:
             result["stub_artifacts"] = write_stub_artifacts(cfg, clusters)
+        append_operation_log(cfg, "promote", f"Generated {len(clusters)} clusters from {len(normalized)} index rows",
+                             {"clusters": len(clusters), "index_rows": len(normalized)})
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -1804,13 +2189,32 @@ def cmd_quality_gate(args: argparse.Namespace) -> None:
     result = quality_gate(cfg)
     if args.apply:
         system_file(cfg, "quality-gate.md").write_text(render_quality_gate(result), encoding="utf-8")
+        append_operation_log(cfg, "quality-gate", f"Gate {'passed' if result['passed'] else 'blocked'}: {result['summary']}",
+                             {"passed": result["passed"], "blockers": len(result.get("blockers", [])), "warnings": len(result.get("warnings", []))})
     print(json.dumps({"written": str(system_file(cfg, "quality-gate.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
     if args.strict and not result["passed"]:
+        raise SystemExit(2)
+
+def cmd_gate_10(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = gate_10(cfg, batch_name=args.batch, batch_threshold=args.threshold)
+    if args.apply:
+        system_file(cfg, "gate-10.md").write_text(render_gate_10(result), encoding="utf-8")
+        result["written"] = str(system_file(cfg, "gate-10.md"))
+        append_operation_log(cfg, "gate-10", f"Scanned {result['scanned']} refinements, {result['passed_count']} passed, {result['failed_count']} failed, {result.get('blocker_count', 0)} blockers", 
+                             {"scanned": result["scanned"], "passed": result["passed_count"], "failed": result["failed_count"], "blockers": result.get("blocker_count", 0)})
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result["passed"] and args.strict:
         raise SystemExit(2)
 
 
 def cmd_package_lint(args: argparse.Namespace) -> None:
     result = package_lint()
+    if args.apply and result["passed"]:
+        tracked = _tracked_package_files()
+        if tracked:
+            SOURCE_HASH_PATH.write_text(_source_content_hash(tracked), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if args.strict and not result["passed"]:
         raise SystemExit(2)
@@ -1877,8 +2281,14 @@ def cmd_run(args: argparse.Namespace) -> None:
     evaluations = [evaluate_output_file(Path(cfg["ai_knowledge_base"]), p) for p in collect_markdown_files(output_root)]
     portability = portability_audit(cfg)
     topic_pages = topic_page_audit(cfg)
+    gate10 = gate_10(cfg)
     written: list[str] = []
     if args.apply:
+        if gate10.get("passed"):
+            system_file(cfg, "gate-10.md").write_text(render_gate_10(gate10), encoding="utf-8")
+            written.append(str(system_file(cfg, "gate-10.md")))
+            append_operation_log(cfg, "gate-10", f"Scanned {gate10['scanned']} refinements, {gate10['passed_count']} passed",
+                                 {"scanned": gate10["scanned"], "passed": gate10["passed_count"], "failed": gate10.get("failed_count", 0)})
         system_file(cfg, "topic-clusters.md").write_text(render_topic_clusters(clusters), encoding="utf-8")
         system_file(cfg, "promotion-review.md").write_text(render_promotion_review(clusters, len(normalized)), encoding="utf-8")
         system_file(cfg, "asset-output-candidates.md").write_text(render_asset_output_candidates(clusters), encoding="utf-8")
@@ -1891,6 +2301,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         append_promotion_decisions(cfg, promotion_decision_rows(clusters, decision_context="run"))
         gate = quality_gate(cfg)
         system_file(cfg, "quality-gate.md").write_text(render_quality_gate(gate), encoding="utf-8")
+        append_operation_log(cfg, "run", f"Audit: {audit_result['source_count']} sources, {audit_result['unprocessed_count']} unprocessed. Clusters: {len(clusters)}. Gate: {gate['passed']}.",
+                             {"sources": audit_result["source_count"], "unprocessed": audit_result["unprocessed_count"], "clusters": len(clusters), "quality_gate_passed": gate["passed"]})
         written = [str(system_file(cfg, name)) for name in ("topic-clusters.md", "promotion-review.md", "asset-output-candidates.md", "verification-queue.jsonl", "verification-status.md", "output-quality-review.md", "output-review-status.md", "portability-audit.md", "topic-page-audit.md", "quality-gate.md")]
         write_run_checkpoint(cfg, objective="deterministic_run", stage="medium_cost_review", cost_tier="medium", status="waiting_for_approval", clusters=clusters, written=written)
         obsidian = cfg.get("integrations", {}).get("obsidian", {})
@@ -1907,6 +2319,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         "verification_pending": verification_state["pending_count"],
         "verification_unresolved_outputs": verification_state["unresolved_output_count"],
         "outputs_evaluated": len(evaluations),
+        "gate10_scanned": gate10.get("scanned", 0),
+        "gate10_passed": gate10.get("passed", False),
         "outputs_pending_review": output_review_state["pending_review_count"],
         "outputs_blocked_by_review": output_review_state["blocking_review_count"],
         "portability_issues": portability["issue_count"],
@@ -2039,8 +2453,17 @@ def main() -> None:
     p_quality_gate.add_argument("--strict", action="store_true")
     p_quality_gate.set_defaults(func=cmd_quality_gate)
 
+    p_gate_10 = sub.add_parser("gate-10")
+    p_gate_10.add_argument("--config", required=True, type=Path)
+    p_gate_10.add_argument("--batch", default=None, help="Batch name for reporting")
+    p_gate_10.add_argument("--threshold", type=float, default=0.3, help="Batch model-text repeat threshold (default 0.3)")
+    p_gate_10.add_argument("--strict", action="store_true", help="Exit non-zero on failure")
+    p_gate_10.add_argument("--apply", action="store_true", help="Write gate-10.md report")
+    p_gate_10.set_defaults(func=cmd_gate_10)
+
     p_package_lint = sub.add_parser("package-lint")
     p_package_lint.add_argument("--strict", action="store_true")
+    p_package_lint.add_argument("--apply", action="store_true", help="Write .source_hash after passing")
     p_package_lint.set_defaults(func=cmd_package_lint)
 
     p_validate = sub.add_parser("validate-config")

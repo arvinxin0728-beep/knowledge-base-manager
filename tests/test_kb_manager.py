@@ -157,7 +157,7 @@ def test_run_apply_is_repeatable() -> None:
         assert second["apply"] is True
         assert before == after
         cfg = json.loads(config.read_text(encoding="utf-8"))
-        decision_log = Path(cfg["ai_knowledge_base"]) / "00-system" / "promotion-decision.jsonl"
+        decision_log = Path(cfg["ai_knowledge_base"]) / "00-system" / "active" / "promotion-decision.jsonl"
         assert decision_log.exists()
         assert len(decision_log.read_text(encoding="utf-8").splitlines()) == len(set(decision_log.read_text(encoding="utf-8").splitlines()))
     finally:

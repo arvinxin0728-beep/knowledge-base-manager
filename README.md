@@ -1,6 +1,6 @@
 # Knowledge Base Manager 中文说明
 
-当前版本：`v0.1.0-beta`
+当前版本：`v0.1.1`
 
 许可证：MIT
 
@@ -89,17 +89,28 @@ Knowledge-System/
 
 ### 00-system
 
-放系统运行需要的配置、索引和质量控制文件。
+放系统运行需要的配置、索引、操作日志和质量控制文件。按类型分为三个子目录：
+
+- `active/` — 当前工作状态，不可重新生成
+- `reports/` — 快照报告，可被 `--apply` 重新生成覆盖
+- `backups/` — 自动备份（保留最近 5 份，超出自动轮转）
 
 常见内容包括：
 
-- `kb-config.json`：知识库目录映射配置
+`active/`：
 - `processed-index.jsonl`：已处理来源索引
+- `run-log.jsonl`：操作日志（每次 `--apply` 追加一条结构化记录）
+- `active-run-state.json`：中断和恢复状态
+- `promotion-decision.jsonl`：晋升决策记录
+- `verification-queue.jsonl`：待验证事实队列
+- `verification-results.jsonl`：验证结果
+
+`reports/`：
 - `topic-clusters.md`：主题候选聚类
 - `promotion-review.md`：晋升评审记录
 - `asset-output-candidates.md`：资产和输出候选
-- `active-run-state.json`：中断和恢复状态
-- `quality-gate.md`：质量门检查结果
+- `quality-gate.md`：质量管理综合门禁
+- `gate-10.md`：精炼层质量门禁结果（结构 + 内容 + 批次检查）
 
 这一层主要给系统和操作者看，不是正式知识内容。
 
@@ -321,6 +332,8 @@ python3 scripts/kb_manager.py doctor --config /absolute/path/to/AI-Knowledge-Bas
 
 系统会读取未处理来源，生成来源精炼，并更新索引。
 
+重复识别优先使用解析后的来源路径，并以内容哈希作为跨路径迁移的兜底证据。旧索引缺少输出路径时，只有在对应的正式精炼文件已经存在时才会自动修复；中断在精炼阶段的任务也可由正式文件和索引恢复为已提交。系统不会仅凭标题把两份资料合并。
+
 ### 做晋升评审
 
 ```text
@@ -421,7 +434,7 @@ Karpathy 风格 LLM Wiki 更强调把信息整理成面向 LLM 使用的 Wiki，
 
 ## 当前成熟度
 
-这个项目当前是 `v0.1.0-beta`，可以作为 Beta 版使用：
+这个项目当前是 `v0.1.1`，可以作为 Beta 版使用：
 
 - 支持初始化和目录映射
 - 支持来源处理和索引
@@ -441,7 +454,7 @@ Karpathy 风格 LLM Wiki 更强调把信息整理成面向 LLM 使用的 Wiki，
 
 ## 发布与维护
 
-本项目使用语义版本号。当前公开版本为 `v0.1.0-beta`。
+本项目使用语义版本号。当前公开版本为 `v0.1.1`。
 
 发布到 GitHub 前至少运行：
 

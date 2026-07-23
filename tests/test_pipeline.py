@@ -186,6 +186,81 @@ def test_existing_index_is_reconciled_into_new_ledger() -> None:
         temp.cleanup()
 
 
+def test_legacy_blank_output_is_reconciled_through_path_alias() -> None:
+    temp, config, sources = make_case()
+    try:
+        cfg = json.loads(config.read_text())
+        alias = Path(temp.name) / "source-alias"
+        alias.symlink_to(sources, target_is_directory=True)
+        cfg["source_libraries"]["articles"] = str(alias)
+        config.write_text(json.dumps(cfg), encoding="utf-8")
+
+        source = next(sources.glob("*.md")).resolve()
+        output = Path(cfg["ai_knowledge_base"]) / "10-source-refinements" / "articles" / f"{source.stem}.md"
+        output.parent.mkdir(parents=True)
+        output.write_text("---\nstage: 来源精炼\n---\n\n# Existing refinement\n", encoding="utf-8")
+        index = Path(cfg["ai_knowledge_base"]) / "00-system" / "processed-index.jsonl"
+        index.parent.mkdir(parents=True)
+        index.write_text(json.dumps({
+            "source_id": "legacy-id",
+            "source_path": str(alias / source.name),
+            "source_sha256": "",
+            "source_type": "article",
+            "title": source.stem,
+            "processed_at": "2026-01-01",
+            "output_file": "",
+            "topics": ["test"],
+            "status": "processed",
+        }) + "\n", encoding="utf-8")
+
+        result = invoke(config, "discover")
+        assert result["reconciled_committed"] == 1
+        assert invoke(config, "status")["states"]["committed"] == 1
+        repaired = json.loads(index.read_text(encoding="utf-8"))
+        assert repaired["source_id"] != "legacy-id"
+        assert repaired["output_file"] == str(output.resolve())
+        assert repaired["source_sha256"]
+    finally:
+        temp.cleanup()
+
+
+def test_reconciliation_recovers_a_refined_job() -> None:
+    temp, config, _sources = make_case()
+    root = Path(temp.name)
+    try:
+        invoke(config, "discover")
+        invoke(config, "extract")
+        job = invoke(config, "claim", "--worker", "interrupted")["jobs"][0]
+        note, metadata = write_refinement(root)
+        invoke(config, "submit", "--job-id", job["job_id"], "--lease-token", job["lease_token"], "--refinement", str(note), "--metadata", str(metadata))
+
+        cfg = json.loads(config.read_text())
+        output = Path(cfg["ai_knowledge_base"]) / "10-source-refinements" / "articles" / "article-0.md"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("---\nstage: 来源精炼\n---\n\n# Existing refinement\n", encoding="utf-8")
+        source = next((Path(temp.name) / "sources").glob("*.md")).resolve()
+        index = Path(cfg["ai_knowledge_base"]) / "00-system" / "processed-index.jsonl"
+        index.write_text(json.dumps({
+            "schema_version": 1,
+            "source_id": job["job_id"],
+            "source_path": str(source),
+            "source_sha256": "",
+            "source_type": "article",
+            "title": source.stem,
+            "processed_at": "2026-01-01",
+            "output_file": str(output),
+            "topics": [],
+            "status": "processed",
+        }) + "\n", encoding="utf-8")
+
+        result = invoke(config, "discover")
+        assert result["reconciled_committed"] == 1
+        assert invoke(config, "status")["states"]["committed"] == 1
+        assert invoke(config, "status")["states"]["refined"] == 0
+    finally:
+        temp.cleanup()
+
+
 def test_cleanup_is_dry_run_by_default_and_only_removes_safe_committed_artifacts() -> None:
     temp, config, _sources = make_case(article_count=2)
     root = Path(temp.name)
@@ -262,6 +337,8 @@ if __name__ == "__main__":
     test_thousand_source_discovery()
     test_source_type_filter_limits_prepare_and_claim()
     test_existing_index_is_reconciled_into_new_ledger()
+    test_legacy_blank_output_is_reconciled_through_path_alias()
+    test_reconciliation_recovers_a_refined_job()
     test_cleanup_is_dry_run_by_default_and_only_removes_safe_committed_artifacts()
     test_runtime_migration_preserves_state_rewrites_paths_and_retires_recoverably()
     print("ok")

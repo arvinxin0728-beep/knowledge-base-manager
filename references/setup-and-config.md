@@ -29,25 +29,34 @@ Knowledge-System/
 │   └── Public-Accounts/
 └── AI-Knowledge-Base/
     ├── 00-system/
-    │   ├── kb-config.json
-    │   ├── processed-index.jsonl
-    │   ├── topics.md
-    │   ├── topic-clusters.md
-    │   ├── promotion-review.md
-    │   ├── promotion-decision.jsonl
-    │   ├── asset-output-candidates.md
-    │   ├── verification-queue.jsonl
-    │   ├── verification-results.jsonl
-    │   ├── verification-status.md
-    │   ├── output-quality-review.md
-    │   ├── output-review-results.jsonl
-    │   ├── output-review-status.md
-    │   ├── portability-audit.md
-    │   ├── topic-page-audit.md
-    │   ├── asset-relation-audit.md
-    │   ├── relation-audit.md
-    │   ├── quality-gate.md
-    │   ├── rules.md
+    │   ├── kb-config.json                  # 配置文件（根目录，通过 --config 引用）
+    │   ├── obsidian-taxonomy.json          # Obsidian 分类映射（根目录）
+    │   ├── active/                         # 当前工作状态
+    │   │   ├── processed-index.jsonl
+    │   │   ├── active-run-state.json
+    │   │   ├── run-log.jsonl               # 操作日志，每次 --apply 追加一条
+    │   │   ├── promotion-decision.jsonl
+    │   │   ├── verification-queue.jsonl
+    │   │   ├── verification-results.jsonl
+    │   │   ├── output-review-results.jsonl
+    │   │   ├── rules.md
+    │   │   └── topics.md
+    │   ├── reports/                        # 可重新生成的快照
+    │   │   ├── topic-clusters.md
+    │   │   ├── promotion-review.md
+    │   │   ├── asset-output-candidates.md
+    │   │   ├── quality-gate.md
+    │   │   ├── gate-10.md
+    │   │   ├── verification-status.md
+    │   │   ├── output-quality-review.md
+    │   │   ├── output-review-status.md
+    │   │   ├── portability-audit.md
+    │   │   ├── topic-page-audit.md
+    │   │   ├── relation-audit.md
+    │   │   ├── asset-relation-audit.md
+    │   │   └── inbox-review.md
+    │   └── backups/                        # 自动备份（保留最近5份，超出轮转）
+    │       └── ... (processed-index.jsonl.20260723, etc.)
     │   ├── inbox-review.md
     │   └── stubs/
     ├── 10-source-refinements/

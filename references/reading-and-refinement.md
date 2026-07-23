@@ -117,6 +117,30 @@ status: processed
 
 Use metadata fields when available; omit unknown fields rather than inventing them.
 
+### Depth Requirements (Gate-10)
+
+Every refinement must pass `gate-10` before it can be committed to `processed-index.jsonl`. The gate enforces three levels:
+
+**Structural** (hard block if missing):
+- Essential sections: `一句话价值`, `核心观点`, `可连接主题`
+- `related_sources` should link to peer refinements in the same thematic cluster
+
+**Content integrity** (hard block):
+- `核心观点` must contain article-specific substance, not template boilerplate
+- The first substantive bullet must not be metadata (url, id, source_file, etc.)
+- `可复用模型` must be a specific model extracted from the source, >20 characters
+- `可连接主题` must be 2-4 specific topics; the 6-topic boilerplate set triggers a block
+
+**Batch-level** (hard block if >30% repetition):
+- If >30% of refinements in the same batch share an identical `可复用模型`, the gate blocks the entire batch — this catches template-filling behavior.
+
+**Recommended section depth** (not hard-blocking but required for promotion):
+- `核心观点`: at least 3 substantive bullet points (>30 chars each)
+- `可复用模型`: at least 40 characters describing a concrete, reusable pattern
+- `可复用案例`: at least 50 characters with a specific use case
+- `存疑点 / 使用边界`: at least 2 distinct cautionary points
+
+
 ## Durable Output Schema
 
 When asked for durable book/source knowledge, include as relevant:
