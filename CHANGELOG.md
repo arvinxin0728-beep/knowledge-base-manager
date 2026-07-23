@@ -62,3 +62,28 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 - High-risk claims require external verification before public, legal, medical, financial, or business-critical use.
 - PDF extraction requires optional local PDF libraries for text PDFs; scanned PDFs require OCR before processing.
 - Platform adapters outside Codex currently rely on script-first or instruction-copy integration rather than native plugin packaging for every agent platform.
+
+
+## [0.1.2] - 2026-07-24
+
+### Added
+
+- `check-refinement` subcommand: single-file gate-10 check returning JSON, used by pipeline at submit/adopt-existing entry points.
+- `sync-relations` subcommand: auto-populate `related_sources` across all refinements based on `theme_cluster` matching.
+- Pipeline gate-10 enforcement: `submit` and `adopt-existing` reject refinements that fail gate-10 checks.
+- YAML frontmatter validation in `quality-gate`: full YAML parse for 20/30/40 files, quote-conflict detection for 10-layer files.
+- Template compliance check in `quality-gate`: 10-layer files must have exactly 20 fields in exact order.
+- `created_at` + `updated_at` field requirement enforced across all layers.
+- `evidence_from` field requirement for 20/30/40 artifacts.
+- `feynman-template.md`: standardized Feynman explanation template with required sections.
+- Delivery self-check rules documented in SKILL.md (rules 16-17).
+
+### Changed
+
+- All 354 source refinements standardized to 20-field template format (field order, tag normalization, YAML cleanup).
+- 147 inline array tags (`"[a", "b"]"`) fixed to proper YAML list items.
+- 140 verification queue items auto-resolved as stale (sources rewritten).
+- All article drafts rewritten with real content (no placeholders).
+- `quality-gate()` checks `evidence_from` field presence (≥1 entry required).
+- `build_cluster()` quality weighting: clusters with <5% rich refinements have auto-discovery points stripped.
+- SKILL.md rules 13-17 cover evidence gate, template reference, quality audit, self-check.

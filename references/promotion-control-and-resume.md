@@ -22,7 +22,7 @@ Ask for explicit user approval before continuing when the next stage changes cos
 |---|---|---|
 | A. Large source batch | Processing a large batch, a new library, or an ambiguous source set. | Controls token and time cost. |
 | B. Topic structure change | Creating new topic structure, merging clusters, splitting clusters, or changing MOC organization. | Changes the knowledge map. |
-| C. High-cost asset/output generation | Creating or substantially rewriting 30-reusable-assets or 40-outputs from candidates. | Consumes judgment and may create reusable public artifacts. |
+| C. High-cost asset/output generation | Creating or substantially rewriting 30-reusable-assets or 40-outputs from candidates. | Consumes judgment and may create reusable public artifacts. Every artifact must include `evidence_from` listing ≥3 supporting source refinements, or the quality-gate will block it. |
 | D. External verification | Browsing, fact-checking, or validating company, market, legal, medical, financial, or current claims. | Adds external dependency and may change conclusions. |
 | E. Destructive or source-library mutation | Deleting, moving, renaming, deduping, or normalizing source-library files. | Changes user-owned source material. |
 

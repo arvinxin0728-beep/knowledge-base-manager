@@ -1927,6 +1927,92 @@ def render_asset_audit(result: dict[str, Any]) -> str:
 
 
 def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
+    template_issues = []
+    # Template for 10-layer files: 20 fields in exact order
+    _10_TEMPLATE = ["stage", "status", "theme_cluster", "tags", "related_sources",
+                    "related_topics", "related_assets", "related_outputs", "moc",
+                    "obsidian_links_updated", "account", "author", "processed_at",
+                    "published_at", "saved_at", "source_file", "source_type", "url",
+                    "created_at", "updated_at"]
+    _10_ROOT = kb_path(cfg, "source_refinements")
+    if _10_ROOT.exists():
+        for p in collect_markdown_files(_10_ROOT):
+            raw = p.read_text("utf-8", errors="ignore")
+            if not raw.startswith("---"):
+                continue
+            parts2 = raw.split("---", 2)
+            if len(parts2) < 3:
+                continue
+            fm_keys = []
+            for line in parts2[1].split(chr(10)):
+                m2 = re.match(r"^(\w[\w_]*):", line)
+                if m2 and not line.startswith(" ") and not line.startswith(chr(9)):
+                    fm_keys.append(m2.group(1))
+            if fm_keys == _10_TEMPLATE:
+                continue
+            rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
+            if len(fm_keys) != len(_10_TEMPLATE):
+                extra = [k for k in fm_keys if k not in _10_TEMPLATE]
+                missing = [k for k in _10_TEMPLATE if k not in fm_keys]
+                template_issues.append({"file": rel, "error": f"field_mismatch: extra={extra}, missing={missing}"})
+            else:
+                for i, (a, b) in enumerate(zip(fm_keys, _10_TEMPLATE)):
+                    if a != b:
+                        template_issues.append({"file": rel, "error": f"order_mismatch at pos {i+1}: expected '{b}', got '{a}'"})
+                        break
+    date_issues = []
+    for root_key in ("source_refinements", "topic_pages", "reusable_assets", "outputs"):
+        root = kb_path(cfg, root_key)
+        if not root.exists():
+            continue
+        for p in collect_markdown_files(root):
+            raw = p.read_text("utf-8", errors="ignore")
+            if not raw.startswith("---"):
+                continue
+            if "created_at:" not in raw:
+                rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
+                date_issues.append(rel)
+            elif "updated_at:" not in raw:
+                rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
+                date_issues.append(rel)
+    yaml_issues = []
+    for root_key in ("source_refinements", "topic_pages", "reusable_assets", "outputs"):
+        root = kb_path(cfg, root_key)
+        if not root.exists():
+            continue
+        for p in collect_markdown_files(root):
+            raw = p.read_text("utf-8", errors="ignore")
+            if not raw.startswith("---"):
+                continue
+            parts = raw.split("---", 2)
+            if len(parts) < 3:
+                continue
+            fm = parts[1]
+            # Check for Chinese quotes inside YAML double-quoted strings — breaks parsing
+            # e.g. "微软发布"组织AI准备度"评价方法论" has Chinese " inside YAML "
+            import re as _re
+            _in_str = False
+            _has_broken_quotes = False
+            for _c in fm:
+                if _c == '"':
+                    _in_str = not _in_str
+            # Count odd number of unescaped double-quotes on lines with both Chinese and ASCII quotes
+            for _line in fm.split('\n'):
+                _ascii_dq = _line.count('"') - _line.count('\"')
+                # Find Chinese quotes inside the line
+                if ('\u201c' in _line or '\u201d' in _line) and _ascii_dq > 0:
+                    _has_broken_quotes = True
+            if _has_broken_quotes:
+                rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
+                yaml_issues.append({"file": rel, "error": "chinese_quotes_in_yaml_string"})
+                continue
+            # Full YAML parse for 20/30/40 files only
+                try:
+                    import yaml as _y
+                    _y.safe_load(fm)
+                except Exception as e:
+                    rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
+                    yaml_issues.append({"file": rel, "error": str(e).split('\n')[0][:80]})
     relation = relation_audit(cfg)
     portability = portability_audit(cfg)
     topic_pages = topic_page_audit(cfg)
@@ -1936,6 +2022,12 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
     output_review = output_review_status(cfg)
     blockers = []
     warnings = []
+    if template_issues:
+        blockers.append({"gate": "template", "issue": "10_layer_field_mismatch_or_order", "count": len(template_issues)})
+    if date_issues:
+        blockers.append({"gate": "dates", "issue": "missing_created_at_or_updated_at", "count": len(date_issues)})
+    if yaml_issues:
+        blockers.append({"gate": "yaml", "issue": "invalid_yaml_frontmatter", "count": len(yaml_issues)})
     if relation["unresolved_count"]:
         blockers.append({"gate": "relations", "issue": "unresolved_wikilinks", "count": relation["unresolved_count"]})
     if relation["duplicate_aliases"]:
@@ -1948,6 +2040,18 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         blockers.append({"gate": "assets", "issue": "asset_relation_or_type_issues", "count": assets["asset_issue_count"]})
     if assets["output_issue_count"]:
         blockers.append({"gate": "outputs", "issue": "missing_parent_topic_or_related_assets", "count": assets["output_issue_count"]})
+    # Check evidence_from in 20/30/40 artifacts
+    kb = Path(cfg["ai_knowledge_base"])
+    evidence_missing = 0
+    for root_key in ("topic_pages", "reusable_assets", "outputs"):
+        root = kb_path(cfg, root_key)
+        for p in collect_markdown_files(root):
+            meta, _body = split_frontmatter(p.read_text("utf-8", errors="replace"))
+            ef = meta.get("evidence_from", meta.get("supported_by", []))
+            if not isinstance(ef, list) or len(ef) == 0:
+                evidence_missing += 1
+    if evidence_missing:
+        blockers.append({"gate": "evidence", "issue": "artifacts_missing_evidence_from_refinements", "count": evidence_missing})
     needs_revision = [item for item in outputs if item["status"] != "usable"]
     if needs_revision:
         blockers.append({"gate": "output_quality", "issue": "outputs_need_revision", "count": len(needs_revision)})
@@ -1963,6 +2067,9 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         "passed": not blockers,
         "blockers": blockers,
         "warnings": warnings,
+        "template_issues": template_issues,
+        "date_issues": date_issues,
+        "yaml_issues": yaml_issues,
         "summary": {
             "relations": {"unresolved": relation["unresolved_count"], "duplicate_aliases": len(relation["duplicate_aliases"])},
             "portability_issues": portability["issue_count"],

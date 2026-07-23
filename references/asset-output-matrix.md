@@ -10,6 +10,20 @@ For stage authorization, cost control, and resuming interrupted promotion work, 
 
 Every artifact needs a trigger, a source boundary, and a quality standard.
 
+### Evidence Gate
+
+Every 20/30/40 artifact MUST include an `evidence_from` (or `supported_by`) YAML field listing at least 3 specific source refinements that support its claims. The `quality-gate` blocks any artifact without this field. This prevents AI-generated content that is not grounded in the actual knowledge base sources.
+
+### Template Reference Requirement
+
+Before writing any new 10/20/30/40 artifact, open at least one existing artifact of the same type that is known to be correct. Copy its frontmatter field order, body section names, tag style, and wikilink format exactly. Do not write from memory or impression.
+
+Known violation patterns:
+- Writing article drafts with `evidence_from`, `output_type`, and `source_theme` fields when existing drafts don't have them
+- Adding extra tags beyond what the template specifies
+- Using placeholder text like "（待补充）" or "（核心观点已写入）" instead of real content
+- Guessing body section structure instead of matching the existing pattern
+
 - Trigger: why this artifact should exist now.
 - Source boundary: which sources or topic page support it, and what remains uncertain.
 - Quality standard: how to judge whether it can be reused without rereading the raw sources.

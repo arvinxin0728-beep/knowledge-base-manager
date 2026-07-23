@@ -287,12 +287,21 @@ Before finalizing work:
 11. Run `audit-portability` after creating or revising 20/30/40 artifacts. Treat any issue in portable artifact bodies as a defect, not a style preference.
 12. Run `audit-topic-pages` after creating, splitting, renaming, or restructuring topic pages. A topic page that only explains a split, migration, or file organization change is not a valid topic page.
 12. Run `gate-10 --strict` before committing source refinements. Blockers must be fixed; batch-level issues indicate template filling.
-13. Run `quality-gate --strict` before declaring a 20/30/40 generation or restructuring task complete. Blockers must be fixed or explicitly left as unfinished work.
+13. Every 20/30/40 artifact must include an `evidence_from` (or `supported_by`) YAML field listing at least 3 specific source refinements that support its claims.
+14. Run `quality-gate --strict` before declaring a 20/30/40 generation or restructuring task complete. The gate now checks `evidence_from` fields — every artifact must cite at least 3 source refinements. Blockers must be fixed or explicitly left as unfinished work.
 14. Run `package-lint --strict` before presenting the skill as installable by other users.
 15. For high-risk output claims, run `verification-queue`, record results with `verify-claim`, then refresh `verification-status`; unresolved output verification is a completion blocker.
 16. For reusable/public outputs, run `output-review` and record a rubric result with `record-output-review`; do not publish or present outputs marked `needs_revision` or `rejected`.
 17. Keep `README.md` synchronized with skill behavior. Any change to positioning, setup, directory model, commands, workflow stages, quality gates, or portability boundaries must update the Chinese README before release. `package-lint --strict` must fail when the README is missing, incomplete, or older than core skill sources.
 18. Public beta releases must include `LICENSE`, `CHANGELOG.md`, `SECURITY.md`, and `INSTALL.zh-CN.md`. Do not present the package as GitHub-ready if any release governance file is missing.
+
+15. All 10-layer (source refinement) files must have exactly 20 frontmatter fields in the exact order defined by the template. Extra fields (fact_risk, source_id, topics, processed_batch) and misordered fields are blocked by `quality-gate --strict`.
+16. After processing or rewriting a batch of source refinements, run a quality distribution audit. Score each file (core points ≥3 bullets = rich, 1-2 = thin, 0 = empty) and report the ratio. A cluster with <30% rich refinements should not be promoted until deepened.
+17. Before marking a fix as complete, run the delivery self-check:
+   a. Run `quality-gate --strict` and `gate-10 --strict` — include the results in the response.
+   b. When fixing one instance of a problem, identify its category (YAML format, field ordering, broken wikilink, etc.) and scan the entire knowledge base for other files with the same category of issue. Fix all instances before reporting done.
+   c. For any file that was created or modified, run a pre-delivery self-check against the relevant quality standard (template field order for 10-layer, format match against an existing file for 20/30/40, YAML parse validation, etc.).
+17. Before writing any 10/20/30/40 artifact (source refinement, topic page, reusable asset, or output), open at least one existing file of the same type that is known to be correct. Match its frontmatter field order, body section names, tag style, and wikilink format exactly. Do not write from memory or impression. Match its frontmatter field order, body section names and structure, tag format, and wikilink style exactly. Do not write from memory or impression.
 
 ## Configuration
 
@@ -344,6 +353,7 @@ For an 8XX setup, prefer the example in `examples/profiles/8xx/profile.md`. Pers
 - `INSTALL.zh-CN.md`: Chinese install and verification guide for Codex, other agent platforms, and script-only use.
 - `LICENSE`, `CHANGELOG.md`, `SECURITY.md`: public distribution license, version history, and security/privacy boundary.
 - `references/output-rules.md`: source refinement, topic-page, asset, and output boundaries.
+- `references/feynman-template.md`: standardized Feynman explanation template with required frontmatter fields and body sections (场景, 核心观点, 一句话解释, 用普通话说清楚, 简单测试, 事实边界, 关联知识).
 - `references/asset-output-matrix.md`: trigger matrix and quality standards for methods, cases, expressions, framework maps, Feynman explanations, article drafts, solution materials, decision memos, and review records.
 - `references/schema.md`: canonical processed-index schema and normalization rules.
 - `references/portable-cluster-rules.json`: empty portable starter rules that discover repeated exact topics without imposing a personal taxonomy.
