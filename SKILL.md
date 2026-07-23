@@ -244,9 +244,11 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `audit-portability`: inspect 20/30/40 artifact bodies for user-specific implementation leakage that should not appear in portable methods or outputs.
 - `audit-topic-pages`: inspect topic pages for required knowledge-page sections and placeholder/process-only structure-review text.
 - `gate-10`: run source-refinement quality gate. Three categories: structural completeness (missing sections), content integrity (template boilerplate, metadata pollution, fabrication patterns), and batch-level model-text repetition. Use `--strict` to exit non-zero on failure. `--apply` writes `gate-10.md` to system reports.
+- `check-refinement --file <path>`: check a single refinement markdown file and return JSON result. Used by `kb_pipeline.py` at submit/adopt-existing entry points to enforce quality gates before content enters the pipeline.
+- `sync-relations --config <config>`: scan all source refinements, group by `theme_cluster`, and update each file's `related_sources` field with wikilinks to up to 5 peer refinements in the same cluster. Run after any batch commit.
 - `quality-gate`: combine relation, portability, topic-page, asset, output-quality, and verification checks into one pass/fail result; use `--strict` to fail on blockers.
 - `package-lint`: inspect the skill package itself for release-blocking portability and packaging issues.
-- `verification-queue`: scan processed notes, topic pages, and outputs for high-risk claims and write a verification queue.
+- `verification-queue`: scan processed notes, topic pages, and outputs for high-risk claims and write a verification queue. Verification results auto-detect stale items: if the source file's modification time is newer than the verification timestamp, the item is marked `stale`.
 - `verify-claim`: append a verification result for a queued claim or file into the verification result ledger.
 - `verification-status`: merge the current queue with the result ledger and report pending, verified, rejected, and unresolved output items.
 - `evaluate-outputs`: mechanically score output files and write `output-quality-review.md`.
@@ -295,6 +297,10 @@ Before finalizing work:
 ## Configuration
 
 Use `references/setup-and-config.md` for the config schema and default portable layout.
+
+### Promotion Scoring with Quality Weighting
+
+Auto-discovered clusters earn question-clarity (1pt), reusability (1pt), and output-intent (1pt) points based on source count and topic keywords. A quality override strips these points if fewer than 5% of member refinements contain 3+ substantive core-point bullets (lines matching `1.`, `2.`, `3.`, `4.` with >40 characters). This prevents thin-content clusters from scoring high for promotion.
 
 ## Bundled Resources
 

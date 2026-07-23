@@ -497,7 +497,16 @@ KNOWN_TEMPLATE_PATTERNS = [
     r"文章的结构线索集中在",
 ]
 
-REFINEMENT_PROBLEM_SECTIONS = ["文章解决的问题", "文章/书籍解决的问题"]
+REFINEMENT_PROBLEM_SECTIONS = ["文章解决的问题", "文章/书籍解决的问题", "Problem addressed"]
+REFINEMENT_ESSENTIAL_SECTIONS = ["一句话价值", "核心观点", "可连接主题"]
+REFINEMENT_ESSENTIAL_ALIASES = {
+    "一句话价值": ["One-line value", "One line value"],
+    "核心观点": ["Core claims", "Core points", "Core argument"],
+    "可连接主题": ["Connected topics", "Related topics"],
+    "可复用模型": ["Reusable models or cases", "Reusable models"],
+    "可复用案例": ["Reusable cases"],
+    "候选提升": ["Promotion candidate"],
+}
 
 
 def extract_sections(text: str) -> dict[str, str]:
@@ -541,33 +550,52 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
 
     meta, body = split_frontmatter(text)
     sections = extract_sections(body)
+    # Normalize English section names to Chinese equivalents
+    _section_normalization = {}
+    for cn, aliases in REFINEMENT_ESSENTIAL_ALIASES.items():
+        for alias in aliases:
+            if alias in sections:
+                _section_normalization[cn] = sections[alias]
+    sections.update(_section_normalization)
 
     has_problem = any(key in sections for key in REFINEMENT_PROBLEM_SECTIONS)
     if not has_problem:
         blockers.append(f"missing_problem_section (expected one of: {', '.join(REFINEMENT_PROBLEM_SECTIONS)})")
 
-    for section in ["一句话价值", "核心观点", "可连接主题"]:
+    essential = list(REFINEMENT_ESSENTIAL_SECTIONS)
+    for section in essential:
         if section not in sections:
-            blockers.append(f"missing_section: {section}")
+            aliases = REFINEMENT_ESSENTIAL_ALIASES.get(section, [])
+            if not any(a in sections for a in aliases):
+                blockers.append(f"missing_section: {section}")
 
     # 可复用模型 and 候选提升 are important but may be absent
     for section in ["可复用模型", "候选提升"]:
         if section not in sections:
-            warnings.append(f"missing_section: {section}")
+            aliases = REFINEMENT_ESSENTIAL_ALIASES.get(section, [])
+            if not any(a in sections for a in aliases):
+                warnings.append(f"missing_section: {section}")
 
     # 可复用案例 is optional - not every source has one
     if "可复用案例" not in sections:
-        warnings.append("missing_section: 可复用案例")
+        aliases = REFINEMENT_ESSENTIAL_ALIASES.get("可复用案例", [])
+        if not any(a in sections for a in aliases):
+            warnings.append("missing_section: 可复用案例")
 
     # related_sources being empty is a warning, not a blocker
     related = meta.get("related_sources", [])
     if isinstance(related, list) and len(related) == 0:
         warnings.append("empty_related_sources")
 
-    # theme_cluster generic is a warning
+    # theme_cluster must be a valid, non-placeholder value
     cluster = meta.get("theme_cluster", "")
-    if cluster in ("AI知识管理", "未归类"):
-        warnings.append(f"generic_theme_cluster: {cluster}")
+    if not cluster or cluster in ("未归类", "未分类"):
+        if not cluster and not meta:
+            warnings.append("missing_theme_cluster: no frontmatter metadata — add theme_cluster when metadata is available")
+        else:
+            blockers.append(f"invalid_theme_cluster: '{cluster}' is a placeholder, assign a real cluster")
+    elif cluster == "AI知识管理":
+        warnings.append(f"generic_theme_cluster: '{cluster}' — consider a more specific cluster if possible")
 
     # Content: core points boilerplate check
     core = sections.get("核心观点", "")
@@ -583,15 +611,14 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
             blockers.append("all_core_points_are_template_boilerplate")
 
     # Content: 可复用模型 should not be template
-    model_text = sections.get("可复用模型", "")
+    model_text = sections.get("可复用模型", "") or sections.get("Reusable models or cases", "")
     if model_text:
         for ptn in (known_templates or KNOWN_TEMPLATE_PATTERNS):
             if re.search(ptn, model_text):
                 blockers.append("template_model_text")
                 break
 
-    # Content: 可连接主题 should not be generic boilerplate set
-    connected = sections.get("可连接主题", "")
+    connected = sections.get("可连接主题", "") or sections.get("Connected topics", "") or sections.get("Related topics", "")
     if connected:
         topic_items = {line.strip().lstrip("- ").strip() for line in connected.split("\n") if line.strip() and line.strip().lstrip("- ").strip()}
         overlap = topic_items & boilerplate_topics
@@ -599,7 +626,7 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
             blockers.append("generic_connected_topics_ge_4_boilerplate")
 
     # Content: 可复用案例 should not be template
-    case_text = sections.get("可复用案例", "")
+    case_text = sections.get("可复用案例", "") or sections.get("Reusable cases", "")
     if case_text:
         for ptn in (known_templates or KNOWN_TEMPLATE_PATTERNS):
             if re.search(ptn, case_text):
@@ -627,7 +654,7 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
             warnings.append("shallow_core_points: no substantive bullet points found")
     
     # --- Depth: 可复用模型 should be specific, not generic one-liner ---
-    model_text = sections.get("可复用模型", "")
+    model_text = sections.get("可复用模型", "") or sections.get("Reusable models or cases", "")
     if model_text and len(model_text.strip()) < 40:
         warnings.append("shallow_model: model text too short (< 40 chars)")
     elif model_text and len(model_text.strip()) < 20:
@@ -814,6 +841,22 @@ def build_cluster(rule: dict[str, Any], members: list[dict[str, Any]], rules: di
         if all_topics & _OUTPUT_KEYWORDS or source_count >= min_sources * 2:
             has_output = True
     risk_controlled = risk != "high" or bool(rule.get("verification_required", False))
+    # Quality weighting: reduce score if cluster has thin content
+    if is_auto and source_count >= min_sources:
+        rich_count = 0
+        for m in members:
+            of = m.get("output_file", "")
+            if of and Path(of).exists():
+                try:
+                    _t = Path(of).read_text("utf-8", errors="replace")
+                    _b = [l for l in _t.split(chr(10)) if l.strip().startswith(("1.", "2.", "3.", "4.")) and len(l.strip()) > 40]
+                    if len(_b) >= 3: rich_count += 1
+                except: pass
+        rich_ratio = rich_count / source_count if source_count > 0 else 0
+        if rich_ratio < 0.05:
+            has_question = False
+            has_reuse = False
+            has_output = False
     score = 0
     score += 1 if source_count >= min_sources else 0
     score += 1 if has_question else 0
@@ -877,7 +920,7 @@ def render_topic_clusters(clusters: list[dict[str, Any]]) -> str:
 
 
 def render_promotion_review(clusters: list[dict[str, Any]], index_count: int) -> str:
-    lines = ["# Promotion Review", "", "---", f"updated_at: {date.today().isoformat()}", "stage: system", "status: active", f"processed_index_count: {index_count}", "---", "", "## Score Rules", "", "| Dimension | Point |", "|---|---:|", "| 3+ relevant sources after semantic merging | 1 |", "| Clear non-placeholder question | 1 |", "| Proven reusable method/case/expression/framework | 1 |", "| Output intent or active project | 1 |", "| Fact risk controlled or marked | 1 |", "", "Repeated source count does not prove reusability. Auto-discovered placeholder topics do not earn the question-clarity point.", "", "## Promotion Decisions", "", "| Cluster | Sources | Score | Asset type | Action |", "|---|---:|---:|---|---|"]
+    lines = ["# Promotion Review", "", "---", f"updated_at: {date.today().isoformat()}", "stage: system", "status: active", f"processed_index_count: {index_count}", "---", "", "## Score Rules", "", "| Dimension | Point |", "|---|---:|", "| 3+ relevant sources after semantic merging | 1 |", "| Clear non-placeholder question | 1 |", "| Proven reusable method/case/expression/framework | 1 |", "| Output intent or active project | 1 |", "| Fact risk controlled or marked | 1 |", "", "Repeated source count does not prove reusability. Auto-discovered clusters earn question/reuse/output points based on source count and content quality. A quality override strips these points if fewer than 15% of member refinements have 3+ substantive core bullets.", "", "## Promotion Decisions", "", "| Cluster | Sources | Score | Asset type | Action |", "|---|---:|---:|---|---|"]
     for c in clusters:
         lines.append(f"| {c['name']} | {c['source_count']} | {c['score']} | {c.get('asset_type', 'unclassified')} | {c['action']} |")
     lines += ["", "## Not Promoted / Cautions", ""]
@@ -1281,13 +1324,38 @@ def latest_verification_results(cfg: dict[str, Any]) -> dict[str, dict[str, Any]
     return latest
 
 
+
+def _source_for_verification_id(cfg: dict[str, Any], vid: str) -> Path | None:
+    """Find the source file for a verification item by scanning refinements."""
+    ref_root = kb_path(cfg, "source_refinements")
+    for p in collect_markdown_files(ref_root):
+        text = p.read_text("utf-8", errors="ignore")
+        h = hashlib.sha256(str(p.relative_to(Path(cfg["ai_knowledge_base"]))).encode("utf-8")).hexdigest()[:16]
+        if h == vid:
+            return p
+    return None
+
+
+
 def verification_status(cfg: dict[str, Any]) -> dict[str, Any]:
     queue = verification_items(cfg)
     latest = latest_verification_results(cfg)
+    # Mark verification results as stale if the source file has been rewritten
+    stale_results = set()
+    for vid, vrow in latest.items():
+        src_file = _source_for_verification_id(cfg, vid)
+        if src_file and src_file.exists():
+            vtime = vrow.get("verified_at", "")
+            mtime = datetime.fromtimestamp(src_file.stat().st_mtime).isoformat()
+            if vtime < mtime:
+                stale_results.add(vid)
     merged = []
     counts: Counter[str] = Counter()
     for item in queue:
         resolved = latest.get(item["id"])
+        if resolved and item["id"] in stale_results:
+            resolved["status"] = "stale"
+            counts["stale"] += 1
         if resolved:
             merged_item = {**item, "status": resolved.get("status", "pending"), "verification": resolved}
         else:
@@ -1942,7 +2010,7 @@ def render_quality_gate(result: dict[str, Any]) -> str:
 def package_lint() -> dict[str, Any]:
     issues = []
     files = sorted([p for p in SKILL_ROOT.rglob("*") if p.is_file()], key=lambda p: str(p))
-    required_release_files = ["LICENSE", "CHANGELOG.md", "SECURITY.md", "INSTALL.zh-CN.md"]
+    required_release_files = ["LICENSE", "CHANGELOG.md", "SECURITY.md", "INSTALL.zh-CN.md", "ARCHITECTURE.md"]
     for rel in required_release_files:
         if not (SKILL_ROOT / rel).exists():
             issues.append({"file": rel, "issue": "missing_release_file"})
@@ -2209,6 +2277,66 @@ def cmd_gate_10(args: argparse.Namespace) -> None:
         raise SystemExit(2)
 
 
+def cmd_check_refinement(args: argparse.Namespace) -> None:
+    """Check a single refinement file and return JSON result. Used by kb_pipeline.py."""
+    path = Path(args.file)
+    if not path.exists():
+        print(json.dumps({"passed": False, "blockers": ["file_not_found"]}))
+        raise SystemExit(2)
+    try:
+        result = check_refinement(path)
+    except Exception as e:
+        print(json.dumps({"passed": False, "blockers": [f"check_error: {e}"]}))
+        raise SystemExit(2)
+    print(json.dumps({"passed": result["passed"], "blockers": result.get("blockers", []), "warnings": result.get("warnings", [])}, ensure_ascii=False))
+    if not result["passed"]:
+        raise SystemExit(2)
+
+
+
+
+def cmd_sync_relations(args: argparse.Namespace) -> None:
+    """Sync related_sources for all refinements based on theme_cluster matching."""
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    ref_dir = kb_path(cfg, "source_refinements")
+    if not ref_dir.exists():
+        print(json.dumps({"error": "source_refinements_dir_not_found"}))
+        raise SystemExit(2)
+    
+    # Build cluster map from frontmatter
+    from collections import defaultdict
+    cluster_map = defaultdict(list)
+    files_list = []
+    for f in sorted(collect_markdown_files(ref_dir)):
+        text = f.read_text("utf-8", errors="replace")
+        m = re.search(r'^theme_cluster:\s*"([^"]+)"', text, re.M)
+        cluster = m.group(1) if m else "AI知识管理"
+        fname = f.stem
+        cluster_map[cluster].append(fname)
+        files_list.append((f, cluster, fname))
+    
+    # For each file, set related_sources to up to 5 peers in same cluster
+    updated = 0
+    for f, cluster, fname in files_list:
+        peers = [n for n in cluster_map[cluster] if n != fname]
+        if not peers:
+            continue
+        selected = peers[:5]
+        link_lines = "\n".join(f'  - "[[{p}]]"' for p in selected)
+        
+        text = f.read_text("utf-8", errors="replace")
+        old_pattern = re.compile(r'^related_sources:\s*\[\s*\]', re.M)
+        if old_pattern.search(text):
+            text = old_pattern.sub(f'related_sources:\n{link_lines}', text)
+            f.write_text(text, encoding="utf-8")
+            updated += 1
+    
+    result = {"updated": updated}
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+
 def cmd_package_lint(args: argparse.Namespace) -> None:
     result = package_lint()
     if args.apply and result["passed"]:
@@ -2460,6 +2588,14 @@ def main() -> None:
     p_gate_10.add_argument("--strict", action="store_true", help="Exit non-zero on failure")
     p_gate_10.add_argument("--apply", action="store_true", help="Write gate-10.md report")
     p_gate_10.set_defaults(func=cmd_gate_10)
+
+    p_check = sub.add_parser("check-refinement")
+    p_check.add_argument("--file", required=True, type=str, help="Path to a single refinement markdown file to check")
+    p_check.set_defaults(func=cmd_check_refinement)
+
+    p_sync = sub.add_parser("sync-relations")
+    p_sync.add_argument("--config", required=True, type=Path)
+    p_sync.set_defaults(func=cmd_sync_relations)
 
     p_package_lint = sub.add_parser("package-lint")
     p_package_lint.add_argument("--strict", action="store_true")

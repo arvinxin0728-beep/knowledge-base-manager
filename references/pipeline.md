@@ -58,6 +58,9 @@ python3 scripts/kb_pipeline.py --config <config> submit \
   --job-id <id> --lease-token <token> \
   --refinement <note.md> --metadata <metadata.json>
 ```
+```
+
+> **Gate-10 enforcement**: `submit` and `adopt-existing` automatically run `check-refinement` before accepting. Blocked-by-gate10 errors require fixing the refinement before retry.
 
 
 ## Quality Gate (Gate-10)

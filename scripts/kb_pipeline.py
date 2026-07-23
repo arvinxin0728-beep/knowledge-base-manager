@@ -550,6 +550,15 @@ def submit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, token: str,
     errors = validate_refinement(refinement, metadata)
     if errors:
         raise SystemExit(json.dumps({"submitted": False, "errors": errors}, ensure_ascii=False))
+    # Gate-10 check: block low-quality refinements before they enter the pipeline
+    import subprocess as _sp
+    _gate = _sp.run([sys.executable, str(Path(__file__).resolve().parents[1] / "scripts" / "kb_manager.py"), "check-refinement", "--file", str(refinement)], capture_output=True, text=True)
+    if _gate.returncode != 0:
+        try:
+            _detail = json.loads(_gate.stdout)
+        except Exception:
+            _detail = {"blockers": ["gate-10_check_failed"]}
+        raise SystemExit(json.dumps({"submitted": False, "blocked_by_gate10": True, **_detail}, ensure_ascii=False))
     db.execute("BEGIN IMMEDIATE")
     row = db.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
     if row is None:
@@ -642,6 +651,15 @@ def adopt_existing(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, exi
     text = existing_file.read_text(encoding="utf-8", errors="ignore")
     if "stage:" not in text or "来源精炼" not in text:
         raise SystemExit("existing_file_is_not_source_refinement")
+    # Gate-10 check: block low-quality refinements before they enter the pipeline
+    import subprocess as _sp
+    _gate = _sp.run([sys.executable, str(Path(__file__).resolve().parents[1] / "scripts" / "kb_manager.py"), "check-refinement", "--file", str(existing_file)], capture_output=True, text=True)
+    if _gate.returncode != 0:
+        try:
+            _detail = json.loads(_gate.stdout)
+        except Exception:
+            _detail = {"blockers": ["gate-10_check_failed"]}
+        raise SystemExit(json.dumps({"adopted": False, "blocked_by_gate10": True, **_detail}, ensure_ascii=False))
     db.execute("BEGIN IMMEDIATE")
     row = db.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)).fetchone()
     if row is None:
