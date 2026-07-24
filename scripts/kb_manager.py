@@ -633,6 +633,45 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
                 blockers.append("template_case_text")
                 break
 
+    # --- Placeholder: no section should contain placeholder text ---
+    PLACEHOLDER_PATTERNS = [
+        r"本文基于原文内容进行精炼提取[。.]?",
+        r"（待补充[^）]*）",
+        r"（核心观点已写入）",
+        r"阅读原文获取具体[内容模型案例][。.]?",
+    ]
+    for _section_name, _section_text in sections.items():
+        for _pp in PLACEHOLDER_PATTERNS:
+            if re.search(_pp, _section_text):
+                blockers.append(f"placeholder_in_{_section_name}: '{_section_text[:40]}'")
+                break
+
+    # --- Model quality: 可复用模型 should be a model, not a paraphrase ---
+    model_text = sections.get("可复用模型", "")
+    one_line = sections.get("一句话价值", "")
+    # Block: model identical to one-line value (lazy paraphrase)
+    if model_text and one_line and model_text.strip() == one_line.strip():
+        blockers.append("model_equals_one_line_value: model is just a copy of the one-line summary")
+    # Block: model too short to be a real model
+    if model_text and len(model_text.strip()) < 30:
+        blockers.append("model_too_short: < 30 chars, not a meaningful model")
+    # Warning: model lacks structural elements
+    if model_text and len(model_text) >= 30:
+        has_structure = any(k in model_text for k in ("→", "->", "第一步", "第二步", "第三", "第一", "首先", "然后", "阶段", "步骤", "层级", "层"))
+        if not has_structure:
+            warnings.append("model_lacks_structure: consider adding flow (→), steps, or layers")
+
+    # --- Problem quality: 文章解决的问题 should identify a problem, not just paraphrase ---
+    problem_section = sections.get("文章解决的问题", sections.get("文章/书籍解决的问题", ""))
+    if problem_section and one_line and problem_section.strip() == one_line.strip():
+        blockers.append("problem_equals_one_line_value: problem statement is just a copy of the one-line summary")
+    if problem_section and len(problem_section.strip()) < 30:
+        blockers.append("problem_too_short: < 30 chars, not a meaningful problem statement")
+    if problem_section and len(problem_section) >= 30:
+        has_problem_lang = any(k in problem_section for k in ("如何", "怎么", "为什么", "是什么", "怎样", "痛点", "解决", "问题", "困难", "挑战"))
+        if not has_problem_lang:
+            warnings.append("problem_lacks_framing: consider stating what problem the article solves")
+
     # --- Depth: 核心观点 should have substantive detail ---
     core = sections.get("核心观点", "")
     if core:
