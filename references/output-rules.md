@@ -148,12 +148,20 @@ Do not overload a Feynman explanation with folder names, tool names, or implemen
 
 ## Article Draft Rules
 
-Article drafts should include:
+Article drafts should not be treated as publishable merely because they have metadata and a short outline. Classify maturity explicitly:
 
+- `article_seed`: 500-1200 Chinese characters, one core claim plus rough structure or素材 notes. Useful for parking an idea, not a finished draft.
+- `article_draft`: at least 1500 Chinese characters in the article body, with an opening hook, reader problem, 3 or more argument sections, examples or cases, a practical implication, and limitations/fact-check notes. This is internally readable but may still need editing.
+- `publishable_draft`: at least 2500 Chinese characters in the article body, with a strong title/hook, narrative or scenario entry, argument progression, counterpoint or tension, concrete examples, memorable phrasing, actionable ending, and fact boundaries. This is close to public release but still requires claim verification when facts are risky.
+
+Every article draft should include:
+
+- `output_type: "文章草稿"`
+- `article_maturity: "article_seed" | "article_draft" | "publishable_draft"`
 - a clear core claim
 - a reader problem
-- a structured argument
-- examples or cases
+- a structured argument with 3 or more sections
+- examples, cases, or concrete scenarios
 - limitations and fact-check notes
 
 Mark `fact_check_required: true` when using public-account articles, product announcements, market data, company claims, or third-party tool descriptions as evidence.

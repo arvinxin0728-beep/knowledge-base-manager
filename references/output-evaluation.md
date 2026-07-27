@@ -27,6 +27,18 @@ A usable output should have:
 
 The script performs a mechanical first pass. Codex should still do a human-quality review for argument strength, evidence quality, and style.
 
+## Article Draft Maturity Gate
+
+For files under the article-drafts output folder, the mechanical pass must also check article maturity. A short outline can be useful, but it should be classified as `article_seed`, not `usable` as a full article.
+
+Minimum mechanical expectations:
+
+- `article_seed`: idea parked; below full draft threshold.
+- `article_draft`: at least 1500 Chinese characters in the main body, 3+ argument sections, reader problem, examples/cases/scenarios, fact boundary.
+- `publishable_draft`: at least 2500 Chinese characters in the main body, 4+ argument sections, opening hook, tension/counterpoint, examples, actionable ending, fact boundary.
+
+If an article draft is only `article_seed`, mark it `needs_revision` for 40-output quality gate purposes unless the user explicitly asked only to park article ideas.
+
 ## Rubric Review
 
 For reusable or public-facing outputs, create a review surface:

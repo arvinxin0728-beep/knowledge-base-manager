@@ -1436,6 +1436,44 @@ def render_verification_status(result: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _section_text(body: str, heading: str) -> str:
+    pattern = rf"(?ms)^##\s+{re.escape(heading)}\s*$\n(.*?)(?=^##\s+|\Z)"
+    match = re.search(pattern, body)
+    return match.group(1).strip() if match else ""
+
+
+def _zh_char_count(text: str) -> int:
+    return len(re.findall(r"[\u4e00-\u9fff]", text))
+
+
+def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
+    draft_body = _section_text(body, "正文草稿") or body
+    zh_chars = _zh_char_count(draft_body)
+    h3_count = len(re.findall(r"(?m)^###\s+", draft_body))
+    has_hook = bool(re.search(r"开头|钩子|故事|场景|很多人|你有没有|为什么", draft_body))
+    has_reader_problem = bool(re.search(r"读者问题|问题|困惑|痛点|为什么", text))
+    has_examples = bool(re.search(r"案例|例子|比如|例如|场景|客户|团队", draft_body))
+    has_counterpoint = bool(re.search(r"但是|反过来|误区|不是.*而是|真正的问题|矛盾", draft_body))
+    has_actionable_end = bool(re.search(r"最后|所以|建议|下一步|你可以|行动|清单", draft_body[-800:]))
+    has_fact_boundary = "fact_check_required" in text or "核查" in text or "事实边界" in text
+    checks = {
+        "article_body_1500_zh": zh_chars >= 1500,
+        "article_body_2500_zh": zh_chars >= 2500,
+        "article_3plus_sections": h3_count >= 3 or len(re.findall(r"(?m)^第[一二三四五六七八九十]+", draft_body)) >= 3,
+        "article_has_hook": has_hook,
+        "article_has_reader_problem": has_reader_problem,
+        "article_has_examples": has_examples,
+        "article_has_counterpoint": has_counterpoint,
+        "article_has_actionable_end": has_actionable_end,
+        "article_has_fact_boundary": has_fact_boundary,
+    }
+    if checks["article_body_2500_zh"] and checks["article_3plus_sections"] and has_hook and has_reader_problem and has_examples and has_counterpoint and has_actionable_end and has_fact_boundary:
+        return "publishable_draft", checks
+    if checks["article_body_1500_zh"] and checks["article_3plus_sections"] and has_reader_problem and has_examples and has_fact_boundary:
+        return "article_draft", checks
+    return "article_seed", checks
+
+
 def evaluate_output_file(base: Path, p: Path) -> dict[str, Any]:
     text = p.read_text(encoding="utf-8", errors="ignore")
     body = re.sub(r"---.*?---", "", text, flags=re.S).strip()
@@ -1449,9 +1487,16 @@ def evaluate_output_file(base: Path, p: Path) -> dict[str, Any]:
         "not_empty_draft": len(body) > 250,
         "no_placeholders": not bool(re.search(r"\bTBD\b|待补充|TODO", text, re.I)),
     }
+    article_maturity = None
+    rel = str(p.relative_to(base))
+    if "文章草稿" in rel or 'output_type: "文章草稿"' in text or "output_type: 文章草稿" in text:
+        article_maturity, article_checks = _article_maturity(text, body)
+        checks.update(article_checks)
     score = sum(1 for ok in checks.values() if ok)
     status = "usable" if score >= max(6, len(checks) - 1) and checks["no_placeholders"] else "needs_revision"
-    return {"file": str(p.relative_to(base)), "score": score, "status": status, "checks": checks}
+    if article_maturity == "article_seed":
+        status = "needs_revision"
+    return {"file": rel, "score": score, "status": status, "checks": checks, "article_maturity": article_maturity}
 
 
 def render_output_quality(results: list[dict[str, Any]]) -> str:
