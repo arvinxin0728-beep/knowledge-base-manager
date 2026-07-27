@@ -1442,6 +1442,10 @@ def _section_text(body: str, heading: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _has_subheading(body: str, heading: str) -> bool:
+    return bool(re.search(rf"(?m)^###\s+{re.escape(heading)}\s*$", body))
+
+
 def _zh_char_count(text: str) -> int:
     return len(re.findall(r"[\u4e00-\u9fff]", text))
 
@@ -1457,8 +1461,9 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
     has_actionable_end = bool(re.search(r"最后|所以|建议|下一步|你可以|行动|清单", draft_body[-800:]))
     has_fact_boundary = "fact_check_required" in text or "核查" in text or "事实边界" in text
     has_title_candidates = bool(_section_text(body, "标题候选"))
-    has_publish_angle = "publish_angle:" in text or bool(_section_text(body, "发布角度"))
-    has_key_scenes = bool(_section_text(body, "关键场景"))
+    editorial_card = _section_text(body, "发布编辑卡片")
+    has_publish_angle = "publish_angle:" in text or bool(_section_text(body, "发布角度")) or _has_subheading(editorial_card, "选题角度")
+    has_key_scenes = bool(_section_text(body, "关键场景")) or _has_subheading(editorial_card, "关键素材")
     memorable_lines = _section_text(body, "可复用金句")
     has_memorable_lines = len(re.findall(r"(?m)^-\s+", memorable_lines)) >= 5
     has_publish_fact_check = bool(_section_text(body, "发布前核查"))

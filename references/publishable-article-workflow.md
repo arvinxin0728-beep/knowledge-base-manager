@@ -27,7 +27,10 @@ Keep `fact_check_required: true` when claims depend on public-account articles, 
 Keep Obsidian Properties compact. Do not put long publication planning lists in frontmatter. The following items must live in body sections instead of YAML:
 
 - `## 标题候选`: 3-5 candidate titles.
-- `## 关键场景`: 2-4 concrete scenes or examples used in the body.
+- `## 发布编辑卡片`: compact editorial planning section with three clear subparts:
+  - `### 选题角度`: the article's public-facing claim and tension; do not repeat audience context.
+  - `### 读者场景`: who is reading and what situation/problem they are in; do not list article examples here.
+  - `### 关键素材`: 2-4 concrete scenes, examples, or cases used in the body.
 - `## 可复用金句`: 5-8 reusable lines from the article.
 - `## 发布前核查`: concrete claims that must be verified before external publishing.
 
@@ -35,15 +38,16 @@ Keep Obsidian Properties compact. Do not put long publication planning lists in 
 
 1. Clarify the publishing angle.
 2. Generate 3-5 title candidates. Keep the H1 as the selected title, not the filename date prefix.
-3. Rewrite the opening with a concrete scene, contradiction, or reader problem.
-4. Build a visible argument spine: problem -> diagnosis -> deeper cause -> better model -> action.
-5. Add at least 4 argument sections.
-6. Add at least 2 concrete scenes, cases, or examples.
-7. Add a counterpoint, misconception, or tension section.
-8. Add 5-8 memorable lines. They may appear in body text and also in a `## 可复用金句` section.
-9. Add an actionable ending: checklist, next step, decision rule, or diagnostic questions.
-10. Add `## 发布前核查` with specific fact-check items.
-11. Preserve `## 事实边界` and `## 关联知识`.
+3. Add `## 发布编辑卡片` with `### 选题角度`, `### 读者场景`, and `### 关键素材`; keep these boundaries non-overlapping.
+4. Rewrite the opening with a concrete scene, contradiction, or reader problem.
+5. Build a visible argument spine: problem -> diagnosis -> deeper cause -> better model -> action.
+6. Add at least 4 argument sections.
+7. Add at least 2 concrete scenes, cases, or examples.
+8. Add a counterpoint, misconception, or tension section.
+9. Add 5-8 memorable lines. They may appear in body text and also in a `## 可复用金句` section.
+10. Add an actionable ending: checklist, next step, decision rule, or diagnostic questions.
+11. Add `## 发布前核查` with specific fact-check items.
+12. Preserve `## 事实边界` and `## 关联知识`.
 
 ## Body shape
 
@@ -53,8 +57,10 @@ Recommended section order:
 # Selected publishable title
 
 ## 标题候选
-## 发布角度
-## 场景
+## 发布编辑卡片
+### 选题角度
+### 读者场景
+### 关键素材
 ## 核心观点
 ## 读者问题
 ## 正文草稿
