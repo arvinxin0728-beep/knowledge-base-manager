@@ -27,10 +27,11 @@ Keep `fact_check_required: true` when claims depend on public-account articles, 
 Keep Obsidian Properties compact. Do not put long publication planning lists in frontmatter. The following items must live in body sections instead of YAML:
 
 - `## 标题候选`: 3-5 candidate titles.
-- `## 发布编辑卡片`: compact editorial planning section with three clear subparts:
-  - `### 选题角度`: the article's entry angle, hook logic, or contrast; do not repeat the core argument verbatim.
-  - `### 读者场景`: who is reading and what situation/problem they are in; do not list article examples here.
-  - `### 关键素材`: 2-4 concrete scenes, examples, or cases used in the body; phrase them as reusable writing materials, not generic audience context.
+- `## 发布编辑卡片`: compact editorial planning section with four clear subparts:
+  - `### 选题切口`: the article's entry angle, hook logic, conflict, or contrast; do not repeat the thesis verbatim.
+  - `### 目标读者`: who is reading and what task, confusion, or decision situation they are in.
+  - `### 核心论断`: the article's thesis in one short paragraph; do not duplicate it again as a separate `## 核心观点`.
+  - `### 关键素材`: 2-4 concrete scenes, examples, cases, methods, or evidence used in the body; phrase them as reusable writing materials, not generic audience context.
 - `## 可复用金句`: 5-8 reusable lines from the article.
 - `## 发布前核查`: concrete claims that must be verified before external publishing.
 
@@ -38,7 +39,7 @@ Keep Obsidian Properties compact. Do not put long publication planning lists in 
 
 1. Clarify the publishing angle.
 2. Generate 3-5 title candidates. Keep the H1 as the selected title, not the filename date prefix.
-3. Add `## 发布编辑卡片` with `### 选题角度`, `### 读者场景`, and `### 关键素材`; keep these boundaries non-overlapping. `选题角度` is the writing entry point, `读者场景` is the reader's situation, `关键素材` is body material, and `## 核心观点` is the article's thesis.
+3. Add `## 发布编辑卡片` with `### 选题切口`, `### 目标读者`, `### 核心论断`, and `### 关键素材`; keep these boundaries non-overlapping. `选题切口` is the opening angle, `目标读者` is the reader's situation, `核心论断` is the thesis, and `关键素材` is body material.
 4. Rewrite the opening with a concrete scene, contradiction, or reader problem.
 5. Build a visible argument spine: problem -> diagnosis -> deeper cause -> better model -> action.
 6. Add at least 4 argument sections.
@@ -58,11 +59,10 @@ Recommended section order:
 
 ## 标题候选
 ## 发布编辑卡片
-### 选题角度
-### 读者场景
+### 选题切口
+### 目标读者
+### 核心论断
 ### 关键素材
-## 核心观点
-## 读者问题
 ## 正文草稿
 ### Opening hook
 ### Argument section 1
@@ -74,10 +74,11 @@ Recommended section order:
 ## 可复用金句
 ## 发布前核查
 ## 事实边界
+## 来源主题
 ## 关联知识
 ```
 
-The final body may use Chinese section titles. The section names are less important than preserving the functions.
+The final body may use Chinese section titles, but avoid keeping old front sections such as `## 场景`, `## 读者问题`, or a separate `## 核心观点` when their content is already represented inside the editorial card. Keep `## 来源主题` near the end with traceability sections, not before the article body.
 
 ## Publishable quality gate
 

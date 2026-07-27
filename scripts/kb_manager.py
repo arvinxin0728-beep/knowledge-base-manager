@@ -1462,7 +1462,12 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
     has_fact_boundary = "fact_check_required" in text or "核查" in text or "事实边界" in text
     has_title_candidates = bool(_section_text(body, "标题候选"))
     editorial_card = _section_text(body, "发布编辑卡片")
-    has_publish_angle = "publish_angle:" in text or bool(_section_text(body, "发布角度")) or _has_subheading(editorial_card, "选题角度")
+    has_publish_angle = (
+        "publish_angle:" in text
+        or bool(_section_text(body, "发布角度"))
+        or _has_subheading(editorial_card, "选题切口")
+        or _has_subheading(editorial_card, "选题角度")
+    )
     has_key_scenes = bool(_section_text(body, "关键场景")) or _has_subheading(editorial_card, "关键素材")
     memorable_lines = _section_text(body, "可复用金句")
     has_memorable_lines = len(re.findall(r"(?m)^-\s+", memorable_lines)) >= 5
@@ -1511,7 +1516,7 @@ def evaluate_output_file(base: Path, p: Path) -> dict[str, Any]:
     checks = {
         "has_source_theme": "source_theme:" in text,
         "has_audience_or_scenario": bool(re.search(r"## (Audience|读者|场景|目标|Audience / Scenario)", text, re.I)),
-        "has_core_message": bool(re.search(r"## (Core Message|核心观点|核心信息|主题问题)", text, re.I)),
+        "has_core_message": bool(re.search(r"(##|###) (Core Message|核心观点|核心论断|核心信息|主题问题)", text, re.I)),
         "has_fact_boundary": "fact_check_required" in text or "核查" in text or "Verification" in text,
         "has_evidence_boundary": bool(re.search(r"来源|证据|Supporting|Evidence|based on|基于", body, re.I)),
         "has_scope_or_limits": bool(re.search(r"边界|限制|不适用|uncertain|limits|scope|verification", body, re.I)),

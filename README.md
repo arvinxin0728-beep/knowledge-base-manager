@@ -213,7 +213,7 @@ updated_at: "YYYY-MM-DD"
 
 40 层内容默认应该具备可读性和可迁移性。除非明确标注为个人案例，否则不要把某个用户的私有目录、批次编号、本机路径写成方法论主体。
 
-文章草稿分为三个成熟度：`article_seed`、`article_draft`、`publishable_draft`。`article_seed` 只是选题和结构素材；`article_draft` 是内部可读的完整草稿；`publishable_draft` 需要标题候选、发布角度、强开头、具体场景、反例或张力、可复用金句、行动性结尾和发布前事实核查清单。升级到发布级草稿时，应按 `references/publishable-article-workflow.md` 执行。
+文章草稿分为三个成熟度：`article_seed`、`article_draft`、`publishable_draft`。`article_seed` 只是选题和结构素材；`article_draft` 是内部可读的完整草稿；`publishable_draft` 需要标题候选、发布编辑卡片（选题切口、目标读者、核心论断、关键素材）、强开头、具体场景、反例或张力、可复用金句、行动性结尾和发布前事实核查清单。升级到发布级草稿时，应按 `references/publishable-article-workflow.md` 执行。
 
 ## 这个系统如何判断“什么时候可以输出”
 
