@@ -55,7 +55,7 @@ def run_new_user_case(config: Path, kb: Path, sources: Path, root: Path) -> None
     assert manager("doctor", "--config", str(config))["healthy"] is True
 
     for index in range(3):
-        (sources / f"article-{index}.md").write_text(
+        (sources / f"2026-01-0{index + 1} article-{index}.md").write_text(
             "# Knowledge workflow\n\n"
             "A reusable knowledge system needs source refinement, topic synthesis, reusable assets, and output review.\n"
             "Connected topics: Knowledge workflow, Output review.\n",
@@ -72,15 +72,13 @@ def run_new_user_case(config: Path, kb: Path, sources: Path, root: Path) -> None
         metadata = root / f"metadata-{job['job_id']}.json"
         refinement.write_text(
             "# Knowledge workflow source\n\n"
-            "---\n"
-            "stage: source_refinement\n"
-            "status: processed\n"
-            "fact_check_required: false\n"
-            "---\n\n"
             "## One-line value\nA knowledge workflow turns raw sources into reusable output.\n\n"
-            "## Problem addressed\nHow to avoid inert content archives.\n\n"
-            "## Core claims\nA layered workflow improves reuse.\n\n"
-            "## Reusable models or cases\nSource refinement, topic page, asset, output.\n\n"
+            "## Problem addressed\nHow can a new user avoid turning a knowledge base into an inert archive of copied articles instead of a reusable thinking system?\n\n"
+            "## Core claims\n"
+            "- A layered workflow separates raw source capture from refinement, synthesis, reusable assets, and reviewed outputs.\n"
+            "- Promotion review prevents a single article from becoming unsupported heavy output while still preserving useful topic candidates.\n"
+            "- Output review makes reuse safer because claims, evidence, and limitations are checked before publication.\n\n"
+            "## Reusable models or cases\nSource refinement → topic synthesis → reusable asset → output review is a four-step operating model for converting raw reading into durable knowledge.\n\n"
             "## Limits / fact-check needs\nMethod claim only.\n\n"
             "## Connected topics\nKnowledge workflow, Output review.\n\n"
             "## Promotion candidate\nCandidate for knowledge workflow topic.\n",
@@ -90,6 +88,7 @@ def run_new_user_case(config: Path, kb: Path, sources: Path, root: Path) -> None
             json.dumps({
                 "title": "Knowledge workflow source",
                 "topics": ["Knowledge workflow", "Output review"],
+                "theme_cluster": "Knowledge workflow",
                 "fact_risk": "low",
                 "fact_check_required": False,
             }),

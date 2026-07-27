@@ -32,6 +32,26 @@ Required fields:
 - Outputs must link back to their source topic page and used assets.
 - High-risk or unverified material should use `待核查` as a status tag when appropriate.
 
+## Duplicate Alias Remediation
+
+When `audit-relations` reports `duplicate_aliases`, treat it as a content hygiene signal, not merely a link-format warning.
+
+Check these likely causes before changing durable topic or output structure:
+
+1. A source-refinement H1 was polluted by raw article residue, such as an image URL, SVG fragment, or public-account footer text.
+2. Multiple source refinements share the same accidental H1 even though their filenames differ.
+3. `source_file` points to the wrong raw article after import or rename.
+4. A wikilink display alias was copied from another source, for example `[[Correct Target|Wrong Display Title]]`.
+
+Preferred repair order:
+
+1. For source refinements, restore the H1 from the refinement filename stem when the H1 is clearly polluted.
+2. If `source_file` is obviously wrong and the expected raw title is known from the refinement filename, correct it to the matching raw source path.
+3. For `20/30/40` artifacts, remove wrong display aliases or replace them with the real target title.
+4. Re-run relation audit and confirm both `unresolved_count` and `duplicate_aliases` are zero.
+
+Do not rewrite the full source refinement just to clear `duplicate_aliases`. If the body also appears mis-captured or mismatched, record it for source-refinement quality review unless the user explicitly asks for content repair.
+
 ## Command
 
 Run:

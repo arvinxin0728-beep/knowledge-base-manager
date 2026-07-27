@@ -40,6 +40,11 @@ def make_case(article_count: int = 1) -> tuple[tempfile.TemporaryDirectory, Path
     return temp, config, sources
 
 
+def processed_index(config: Path) -> Path:
+    cfg = json.loads(config.read_text(encoding="utf-8"))
+    return Path(cfg["ai_knowledge_base"]) / "00-system" / "active" / "processed-index.jsonl"
+
+
 def write_refinement(root: Path, suffix: str = "") -> tuple[Path, Path]:
     note = root / f"refinement{suffix}.md"
     note.write_text(
@@ -54,7 +59,14 @@ def write_refinement(root: Path, suffix: str = "") -> tuple[Path, Path]:
         encoding="utf-8",
     )
     metadata = root / f"metadata{suffix}.json"
-    metadata.write_text(json.dumps({"title": "Article refinement", "topics": ["Knowledge systems"], "fact_risk": "low", "fact_check_required": False}), encoding="utf-8")
+    metadata.write_text(json.dumps({
+        "title": "Article refinement",
+        "topics": ["Knowledge systems"],
+        "theme_cluster": "Knowledge systems",
+        "saved_at": "2026-01-01",
+        "fact_risk": "low",
+        "fact_check_required": False,
+    }), encoding="utf-8")
     return note, metadata
 
 
@@ -77,11 +89,12 @@ def test_full_lifecycle_and_idempotent_commit() -> None:
         assert again["idempotent"] is True
         status = invoke(config, "status")
         assert status["states"]["committed"] == 1
-        index = Path(json.loads(config.read_text())["ai_knowledge_base"]) / "00-system" / "processed-index.jsonl"
+        index = processed_index(config)
         assert len(index.read_text(encoding="utf-8").splitlines()) == 1
         output = Path(committed["output_file"]).read_text(encoding="utf-8")
-        assert output.startswith("---\nsource_id:")
+        assert output.startswith("---\nstage: 来源精炼")
         assert "stage: 来源精炼" in output
+        assert 'saved_at: "2026-01-01"' in output
     finally:
         temp.cleanup()
 
