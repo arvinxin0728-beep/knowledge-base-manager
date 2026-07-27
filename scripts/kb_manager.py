@@ -1456,18 +1456,44 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
     has_counterpoint = bool(re.search(r"但是|反过来|误区|不是.*而是|真正的问题|矛盾", draft_body))
     has_actionable_end = bool(re.search(r"最后|所以|建议|下一步|你可以|行动|清单", draft_body[-800:]))
     has_fact_boundary = "fact_check_required" in text or "核查" in text or "事实边界" in text
+    has_title_candidates = "title_candidates:" in text or bool(_section_text(body, "标题候选"))
+    has_publish_angle = "publish_angle:" in text or bool(_section_text(body, "发布角度"))
+    has_key_scenes = "key_scenes:" in text or bool(_section_text(body, "关键场景"))
+    memorable_lines = _section_text(body, "可复用金句")
+    has_memorable_lines = "memorable_lines:" in text or len(re.findall(r"(?m)^-\s+", memorable_lines)) >= 5
+    has_publish_fact_check = "fact_check_items:" in text or bool(_section_text(body, "发布前核查"))
     checks = {
         "article_body_1500_zh": zh_chars >= 1500,
         "article_body_2500_zh": zh_chars >= 2500,
         "article_3plus_sections": h3_count >= 3 or len(re.findall(r"(?m)^第[一二三四五六七八九十]+", draft_body)) >= 3,
+        "article_4plus_sections": h3_count >= 4,
         "article_has_hook": has_hook,
         "article_has_reader_problem": has_reader_problem,
         "article_has_examples": has_examples,
         "article_has_counterpoint": has_counterpoint,
         "article_has_actionable_end": has_actionable_end,
         "article_has_fact_boundary": has_fact_boundary,
+        "article_has_title_candidates": has_title_candidates,
+        "article_has_publish_angle": has_publish_angle,
+        "article_has_key_scenes": has_key_scenes,
+        "article_has_memorable_lines": has_memorable_lines,
+        "article_has_publish_fact_check": has_publish_fact_check,
     }
-    if checks["article_body_2500_zh"] and checks["article_3plus_sections"] and has_hook and has_reader_problem and has_examples and has_counterpoint and has_actionable_end and has_fact_boundary:
+    if (
+        checks["article_body_2500_zh"]
+        and checks["article_4plus_sections"]
+        and has_hook
+        and has_reader_problem
+        and has_examples
+        and has_counterpoint
+        and has_actionable_end
+        and has_fact_boundary
+        and has_title_candidates
+        and has_publish_angle
+        and has_key_scenes
+        and has_memorable_lines
+        and has_publish_fact_check
+    ):
         return "publishable_draft", checks
     if checks["article_body_1500_zh"] and checks["article_3plus_sections"] and has_reader_problem and has_examples and has_fact_boundary:
         return "article_draft", checks
@@ -1496,6 +1522,25 @@ def evaluate_output_file(base: Path, p: Path) -> dict[str, Any]:
     status = "usable" if score >= max(6, len(checks) - 1) and checks["no_placeholders"] else "needs_revision"
     if article_maturity == "article_seed":
         status = "needs_revision"
+    elif article_maturity in {"article_draft", "publishable_draft"} and all(
+        checks.get(key, False)
+        for key in [
+            "has_source_theme",
+            "has_audience_or_scenario",
+            "has_core_message",
+            "has_fact_boundary",
+            "has_evidence_boundary",
+            "has_scope_or_limits",
+            "not_empty_draft",
+            "no_placeholders",
+            "article_body_1500_zh",
+            "article_3plus_sections",
+            "article_has_reader_problem",
+            "article_has_examples",
+            "article_has_fact_boundary",
+        ]
+    ):
+        status = "usable"
     return {"file": rel, "score": score, "status": status, "checks": checks, "article_maturity": article_maturity}
 
 

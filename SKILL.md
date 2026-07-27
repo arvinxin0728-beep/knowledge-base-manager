@@ -51,6 +51,7 @@ The package should remain usable beyond Codex. Codex reads `SKILL.md` as the nat
 
 - Use `references/reading-and-refinement.md` whenever reading, refining, synthesizing, or outputting from books, ebooks, public-account articles, webpages, newsletters, Markdown, PDF, EPUB, DOCX, HTML, TXT, or copied article text.
 - Use `references/asset-output-matrix.md` whenever deciding whether a source, topic page, batch, or active project should produce reusable assets such as methods, cases, expressions, framework maps, or outputs such as Feynman explanations, article drafts, solution materials, decision memos, and review records.
+- Use `references/publishable-article-workflow.md` whenever upgrading an article draft from `article_draft` to `publishable_draft`.
 - Use `references/promotion-control-and-resume.md` whenever a request may cross stages, consume high token cost, require human approval, or need to resume after a pause or termination.
 - Use `scripts/ebook_probe.py` for deterministic text extraction from supported local files.
 - Use `references/official-account-library.md` when a mapped source library is a WeChat/公众号 Markdown library that needs auditing, importing, flattening, deduping, or filename normalization.
@@ -400,6 +401,7 @@ For an 8XX setup, prefer the example in `examples/profiles/8xx/profile.md`. Pers
 - `INSTALL.zh-CN.md`: Chinese install and verification guide for Codex, other agent platforms, and script-only use.
 - `LICENSE`, `CHANGELOG.md`, `SECURITY.md`: public distribution license, version history, and security/privacy boundary.
 - `references/output-rules.md`: source refinement, topic-page, asset, and output boundaries.
+- `references/publishable-article-workflow.md`: publication-level article rewrite workflow, required metadata, title/hook/scenes/memorable-lines/fact-check gates, and review commands for upgrading `article_draft` to `publishable_draft`.
 - `references/feynman-template.md`: standardized Feynman explanation template with required frontmatter fields and body sections (场景, 核心观点, 一句话解释, 用普通话说清楚, 简单测试, 事实边界, 关联知识).
 - `references/asset-output-matrix.md`: trigger matrix and quality standards for methods, cases, expressions, framework maps, Feynman explanations, article drafts, solution materials, decision memos, and review records.
 - `references/schema.md`: canonical processed-index schema and normalization rules.

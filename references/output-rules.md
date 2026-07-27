@@ -166,6 +166,8 @@ Every article draft should include:
 
 Mark `fact_check_required: true` when using public-account articles, product announcements, market data, company claims, or third-party tool descriptions as evidence.
 
+When upgrading an article from `article_draft` to `publishable_draft`, read `publishable-article-workflow.md` before rewriting. Do not mark an article as `publishable_draft` merely because it is longer; it must have a publishing angle, title candidates, a strong opening hook, concrete scenes, memorable lines, actionable ending, and a specific publication fact-check list.
+
 ## Solution Material Rules
 
 Solution materials are portable by default. They should describe standard methods, roles, decisions, checklists, and operating rules that can be understood without a specific user's folder names or prior conversation.
