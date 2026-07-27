@@ -88,6 +88,49 @@ Treat output artifacts as reusable knowledge products by default, not as private
 - If an output would be confusing without the user's private context, rewrite it as universal methodology first and move the personal mapping into a clearly marked example section.
 - File titles for reusable outputs should be portable. Avoid titles that depend on a private folder code or user-specific case unless the file is intentionally a case record.
 
+## Freshness Filename Rule
+
+For all formal knowledge documents under source refinements, topic pages, reusable assets, and outputs, filenames must expose freshness.
+
+Source refinement filenames use three dates:
+
+```text
+YYYY-MM-DD YYYY-MM-DD YYYY-MM-DD Title.md
+```
+
+The first date is `updated_at`. The second date is `created_at`. The third date is `saved_at`.
+
+For source refinements, `saved_at` means the date the original/source material entered the user's source library or original-material library. It is not publication date, processing date, or refinement creation date.
+
+Topic pages, reusable assets, and outputs use two dates:
+
+```text
+YYYY-MM-DD YYYY-MM-DD Title.md
+```
+
+The first date is `updated_at`. The second date is `created_at`. The title after the date prefix must match the first Markdown H1 title without any existing date prefix.
+
+Rules:
+
+- Every new 10/20/30/40 Markdown artifact must include `created_at` and `updated_at`.
+- Every 10/source-refinement artifact must include `saved_at`. If an older source lacks `saved_at`, recover it from the canonical `source_file` filename date prefix when available.
+- Never use `created_at`, `updated_at`, `processed_at`, or publication date as a silent fallback for `saved_at`. If the original saved date cannot be recovered, leave the item for manual review and let `audit-filename-dates` / `quality-gate --strict` report it.
+- `updated_at` must be greater than or equal to `created_at`.
+- Whenever a 10/20/30/40 artifact body, frontmatter, links, or knowledge judgment is updated, update `updated_at` to the current date and rename the file so the first filename date matches the new `updated_at`.
+- When a file is renamed for freshness, all Obsidian wikilinks pointing to the old title must be migrated to the new title while preserving aliases.
+- Do not apply this filename rule to system reports and ledgers under the system folder unless they are formal knowledge artifacts.
+
+Use:
+
+```bash
+python3 scripts/kb_manager.py audit-filename-dates --config <config>
+python3 scripts/kb_manager.py normalize-filename-dates --config <config> --apply
+```
+
+When intentionally reprocessing or globally refreshing existing knowledge artifacts, add `--touch-updated-at` so every touched artifact receives today's `updated_at` and filename update date.
+
+`quality-gate --strict` must block when freshness filenames are missing, filename dates do not match frontmatter, or `updated_at < created_at`.
+
 ## Core Workflow
 
 ### 1. Inspect and map
@@ -243,6 +286,8 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `audit-relations`: inspect 20/30/40 relationship integrity and unresolved wikilinks.
 - `audit-portability`: inspect 20/30/40 artifact bodies for user-specific implementation leakage that should not appear in portable methods or outputs.
 - `audit-topic-pages`: inspect topic pages for required knowledge-page sections and placeholder/process-only structure-review text.
+- `audit-filename-dates`: inspect 10/20/30/40 Markdown filenames for the freshness naming rule: `updated_at created_at title.md`, and check `updated_at >= created_at`.
+- `normalize-filename-dates`: rename 10/20/30/40 Markdown files to the freshness naming rule, update H1 titles to match, fix `updated_at < created_at`, and migrate wikilinks from old titles to new titles.
 - `gate-10`: run source-refinement quality gate. Three categories: structural completeness (missing sections), content integrity (template boilerplate, metadata pollution, fabrication patterns), and batch-level model-text repetition. Use `--strict` to exit non-zero on failure. `--apply` writes `gate-10.md` to system reports.
 - `check-refinement --file <path>`: check a single refinement markdown file and return JSON result. Used by `kb_pipeline.py` at submit/adopt-existing entry points to enforce quality gates before content enters the pipeline.
 - `sync-relations --config <config>`: scan all source refinements, group by `theme_cluster`, and update each file's `related_sources` field with wikilinks to up to 5 peer refinements in the same cluster. Run after any batch commit.
@@ -287,8 +332,8 @@ Before finalizing work:
 11. Run `audit-portability` after creating or revising 20/30/40 artifacts. Treat any issue in portable artifact bodies as a defect, not a style preference.
 12. Run `audit-topic-pages` after creating, splitting, renaming, or restructuring topic pages. A topic page that only explains a split, migration, or file organization change is not a valid topic page.
 12. Run `gate-10 --strict` before committing source refinements. Blockers must be fixed; batch-level issues indicate template filling.
-13. Every 20/30/40 artifact must include an `evidence_from` (or `supported_by`) YAML field listing at least 3 specific source refinements that support its claims.
-14. Run `quality-gate --strict` before declaring a 20/30/40 generation or restructuring task complete. The gate now checks `evidence_from` fields — every artifact must cite at least 3 source refinements. Blockers must be fixed or explicitly left as unfinished work.
+13. Every 20/30/40 artifact must include an `evidence_from` (or `supported_by`) YAML field. Evidence count is artifact-specific: heavy artifacts such as topic pages, methods, frameworks, solution materials, article drafts, and decision memos usually require 3 source refinements; lightweight cases and expressions may use 1 strong source when attribution, source context, reuse context, and fact-risk boundary are explicit.
+14. Run `quality-gate --strict` before declaring a 20/30/40 generation or restructuring task complete. The gate checks `evidence_from` fields using artifact-specific thresholds. Blockers must be fixed or explicitly left as unfinished work.
 14. Run `package-lint --strict` before presenting the skill as installable by other users.
 15. For high-risk output claims, run `verification-queue`, record results with `verify-claim`, then refresh `verification-status`; unresolved output verification is a completion blocker.
 16. For reusable/public outputs, run `output-review` and record a rubric result with `record-output-review`; do not publish or present outputs marked `needs_revision` or `rejected`.
@@ -301,7 +346,9 @@ Before finalizing work:
    a. Run `quality-gate --strict` and `gate-10 --strict` — include the results in the response.
    b. When fixing one instance of a problem, identify its category (YAML format, field ordering, broken wikilink, etc.) and scan the entire knowledge base for other files with the same category of issue. Fix all instances before reporting done.
    c. For any file that was created or modified, run a pre-delivery self-check against the relevant quality standard (template field order for 10-layer, format match against an existing file for 20/30/40, YAML parse validation, etc.).
-17. Before writing any 10/20/30/40 artifact (source refinement, topic page, reusable asset, or output), open at least one existing file of the same type that is known to be correct. Match its frontmatter field order, body section names, tag style, and wikilink format exactly. Do not write from memory or impression. Match its frontmatter field order, body section names and structure, tag format, and wikilink style exactly. Do not write from memory or impression.
+18. Every created or modified 10/20/30/40 knowledge artifact must record the update date in frontmatter as `updated_at: "YYYY-MM-DD"`. This applies to body edits, relation/link refreshes, metadata changes, status changes, evidence updates, and batch scripts that actually change file content. New artifacts must include both `created_at` and `updated_at`. Read-only audits do not change `updated_at`. Append-only runtime logs keep their own event `timestamp` instead of forcing `updated_at`.
+19. Before writing any 10/20/30/40 artifact (source refinement, topic page, reusable asset, or output), open at least one existing file of the same type that is known to be correct. Match its frontmatter field order, body section names, tag style, and wikilink format exactly. Do not write from memory or impression. Match its frontmatter field order, body section names and structure, tag format, and wikilink style exactly. Do not write from memory or impression.
+20. After every promotion review, run a portfolio balance check. If cases, expressions, MOCs, or topic pages are stagnant while methods/frameworks keep growing, create a deficiency report and split opportunities into `case_candidates`, `expression_candidates`, `moc_split_candidates`, `framework_candidates`, `method_candidates`, and `output_candidates` before generating more heavy assets.
 
 ## Configuration
 

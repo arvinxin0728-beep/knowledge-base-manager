@@ -114,6 +114,38 @@ Knowledge-System/
 
 这一层主要给系统和操作者看，不是正式知识内容。
 
+### 新鲜度文件名规则
+
+正式知识内容，也就是 `10-source-refinements`、`20-topic-pages`、`30-reusable-assets`、`40-outputs` 中的 Markdown 文件，需要在文件名暴露知识新鲜度。
+
+`10-source-refinements` 采用三日期：
+
+```text
+YYYY-MM-DD YYYY-MM-DD YYYY-MM-DD Title.md
+```
+
+依次对应：`updated_at`、`created_at`、`saved_at`。
+
+其中 `saved_at` 表示原始材料进入来源库/原始材料库的日期，不是发布日期、处理日期，也不是精炼文件创建日期。历史文件缺失 `saved_at` 时，只能优先从 `source_file` 指向的原始文件名前缀日期恢复；无法恢复时应进入人工复核，不能静默用 `created_at` 或 `processed_at` 代替。
+
+`20-topic-pages`、`30-reusable-assets`、`40-outputs` 采用两日期：
+
+```text
+YYYY-MM-DD YYYY-MM-DD Title.md
+```
+
+依次对应：`updated_at`、`created_at`。当正文、frontmatter、关系链接或知识判断更新时，必须同步更新 `updated_at` 和文件名第一日期。
+
+常用命令：
+
+```bash
+python3 scripts/kb_manager.py audit-filename-dates --config <config>
+python3 scripts/kb_manager.py normalize-filename-dates --config <config> --apply
+python3 scripts/kb_manager.py normalize-filename-dates --config <config> --touch-updated-at --apply
+```
+
+`quality-gate --strict` 会阻塞缺失新鲜度文件名、文件名日期与 frontmatter 不一致，或 `updated_at < created_at` 的情况。
+
 ### 10-source-refinements
 
 放单个来源的精炼结果。
@@ -127,6 +159,14 @@ Knowledge-System/
 - 它可能关联到哪些主题？
 
 这一层不追求输出完整观点，只负责把原文读懂并压缩。
+
+所有正式知识文档只要被实际创建或修改，都必须在 frontmatter 中记录更新时间：
+
+```yaml
+updated_at: "YYYY-MM-DD"
+```
+
+这条规则适用于 10 来源精炼、20 主题页、30 可复用资产和 40 输出。修改正文、关系链接、标签、状态、证据来源或其他 frontmatter 字段，都必须同步更新 `updated_at`。批量脚本如果实际改写文件，也必须更新该字段。只读审查不更新；追加型运行日志继续使用事件 `timestamp`。
 
 ### 20-topic-pages
 
@@ -175,9 +215,9 @@ Knowledge-System/
 
 ## 这个系统如何判断“什么时候可以输出”
 
-系统不鼓励“读一篇就产出一堆内容”。默认使用晋升机制：
+系统不鼓励“读一篇就产出一堆内容”。默认使用晋升机制，但不同产物使用不同门槛：
 
-1. 来源数量足够：通常至少 3 个相关来源
+1. 来源数量足够：主题页、方法论、框架、方案、文章通常至少 3 个相关来源；案例和金句表达可以来自 1 个强来源
 2. 问题清晰：能被表达成一个具体问题
 3. 可复用：存在方法、案例、表达、框架或清单价值
 4. 有输出场景：可以支持文章、方案、解释、决策或项目
@@ -186,6 +226,14 @@ Knowledge-System/
 评分越高，越适合从 10 层晋升到 20、30、40。
 
 如果只满足部分条件，应先保留为主题候选，而不是强行生成主题页、资产或输出。
+
+系统现在区分两条晋升通道：
+
+- 重资产通道：主题页、方法论、框架图谱、方案素材、文章草稿、决策备忘。要求更强证据，通常需要 3 个以上来源。
+- 轻资产通道：案例、反例、金句表达、定义、区分、警示、隐喻。可以从 1 个强来源生成，但必须标注来源、使用场景和事实边界。
+- 导航通道：MOC/索引页强调路由和可追溯，不按主题页的 3 来源综合门槛处理。
+
+每轮晋升后还要检查产物组合是否失衡。如果案例长期为 0、金句表达过少、MOC 和主题页长期不增长，或候选长期停留在 `unclassified`，需要先做候选拆分和缺口修正，再继续生成重资产。
 
 ## 适合谁
 

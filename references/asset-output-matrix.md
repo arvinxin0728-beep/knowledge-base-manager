@@ -12,7 +12,20 @@ Every artifact needs a trigger, a source boundary, and a quality standard.
 
 ### Evidence Gate
 
-Every 20/30/40 artifact MUST include an `evidence_from` (or `supported_by`) YAML field listing at least 3 specific source refinements that support its claims. The `quality-gate` blocks any artifact without this field. This prevents AI-generated content that is not grounded in the actual knowledge base sources.
+Every 20/30/40 artifact MUST include an `evidence_from` (or `supported_by`) YAML field. The minimum evidence count depends on artifact type:
+
+| Artifact type | Minimum evidence | Rule |
+|---|---:|---|
+| Topic page | 3 source refinements | Must synthesize multiple sources around one question. |
+| MOC / index page | 1 source, topic page, or navigation basis | Navigation pages route knowledge; they need traceability but not the full synthesis burden of a topic page. |
+| Method, workflow, checklist, SOP, standard, scoring card, template, design card | 3 source refinements preferred; 1 strong source only when marked draft with clear limits | Must include steps, conditions, limits, and when not to use it. |
+| Framework, model, map, decision tree, loop | 3 source refinements preferred | Must show relationships, not just a list. |
+| Article draft, solution material, decision memo, Feynman explanation | 3 source refinements preferred; 2 allowed for low-risk Feynman explanations | Must name reader/scenario and fact boundary. |
+| Case, case-pattern, anti-case | 1 primary source refinement | Must include background, action, result or claimed result, transferable lesson, and fact-risk boundary. |
+| Expression, definition, distinction, warning, metaphor | 1 primary source refinement | Must include attribution, source context, and `use_when`/使用场景 guidance. |
+| Review record | 1 system event, batch, audit, or run log entry | Must record what happened, evidence, diagnosis, rule change, and next experiment. |
+
+This prevents heavy artifacts from being generated on weak evidence while allowing lightweight assets such as cases and expressions to grow from one strong source with explicit boundaries.
 
 ### Template Reference Requirement
 
@@ -40,6 +53,8 @@ These guards override the matrix:
 - Do not default unclassified reusable material to Method. Use `unclassified` until the method, case, expression, or framework-map trigger is proven.
 - A topic page with more than 5 linked reusable assets or more than 5 linked outputs must trigger a structure review before new assets or outputs are created.
 - A Method asset must include steps, conditions, limits, and when not to use it. Otherwise it remains a candidate.
+- Do not force lightweight assets through heavy-asset gates. A case or expression can be promoted from one strong source when its source boundary and reuse context are explicit.
+- Do not let all candidates remain `unclassified`. After each promotion review, split opportunities into concrete candidate pools: `topic_candidates`, `case_candidates`, `expression_candidates`, `framework_candidates`, `method_candidates`, `output_candidates`, and `moc_split_candidates`.
 
 ## Reusable Asset Matrix
 
@@ -62,6 +77,18 @@ Do not use broad folder names such as `methods`, `方法论`, `框架图谱`, or
 | Case | A source contains a concrete situation, action, result, and transferable lesson. | The example is only decorative or lacks outcome/context. | Background, action, result, lesson, and applicability boundary are clear. |
 | Expression | A source contains a compact definition, distinction, metaphor, warning, or memorable formulation that can improve future writing or explanation. | The sentence is merely catchy, unsupported, too context-dependent, or too long to quote safely. | Short, attributable, context-preserved, and paired with "use when" guidance. |
 | Framework map | A topic contains a structure: layers, sequence, causal chain, role system, feedback loop, decision tree, or concept relationship. | The content is only a list of points without structural relationship. | Nodes, relationships, direction, and interpretation are clear. |
+
+## Lightweight Promotion Lane
+
+Use this lane before high-cost generation whenever a batch contains reusable small units.
+
+| Candidate pool | Promote when | Minimum fields before generation |
+|---|---|---|
+| `case_candidates` | One source has a concrete situation, action, result/claimed result, and transferable lesson. | `candidate_id`, `artifact_type`, `parent_topic`, `source_refs`, `fact_risk`, `reuse_context`, `recommended_action`. |
+| `expression_candidates` | One source contains a compact definition, distinction, warning, metaphor, or reusable wording. | `candidate_id`, `artifact_type`, `parent_topic`, `source_refs`, `use_when`, `source_context`, `recommended_action`. |
+| `moc_split_candidates` | A topic mixes distinct questions, reuse modes, or output scenarios. | `candidate_id`, `parent_moc`, `proposed_child`, `reason_to_split`, `source_refs`, `risk`. |
+
+Lightweight assets are not filler. They must be small, attributable, and callable. If they cannot be reused without rereading the raw source, keep them as candidates.
 
 ## Output Matrix
 
@@ -132,3 +159,13 @@ After a promotion round, inspect the artifact mix:
 - No review records: the system may be running without learning from its own behavior.
 
 Use this check to decide the next artifact to create, not to force artificial balance.
+
+### Portfolio Health Flags
+
+Record these flags in candidate or review reports:
+
+- `case_count = 0`: red flag unless the source batch has no concrete cases.
+- `expression_count < 5` after many sources: yellow flag; scan for definitions, distinctions, warnings, and metaphors.
+- `unclassified_candidates > 0`: red flag; classify before high-cost generation.
+- Topic/MOC count unchanged across large batches: yellow flag; inspect `moc_split_candidates`.
+- Methods/frameworks growing while cases/expressions stay flat: yellow flag; the system may be over-abstracting.

@@ -1637,6 +1637,238 @@ def wikilink_targets(text: str) -> list[str]:
     return [clean_link_target(x) for x in re.findall(r"\[\[([^\]]+)\]\]", text)]
 
 
+DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})(?:\s+(\d{4}-\d{2}-\d{2}))?\s+(.+)$")
+
+
+def _date_value(meta: dict[str, Any], key: str) -> str:
+    value = str(meta.get(key) or "").strip().strip('"').strip("'")
+    if re.match(r"^\d{4}-\d{2}-\d{2}", value):
+        return value[:10]
+    return ""
+
+
+def recover_saved_at_from_source(meta: dict[str, Any]) -> str:
+    source_file = str(meta.get("source_file") or "").strip().strip('"')
+    name = Path(source_file).name if source_file else ""
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})(?:\s|_|-|$)", name)
+    return m.group(1) if m else ""
+
+
+def _body_title(body: str, fallback: str) -> str:
+    match = re.search(r"(?m)^#\s+(.+)$", body)
+    return match.group(1).strip() if match else fallback
+
+
+def strip_date_prefix(title: str, meta: dict[str, Any] | None = None, root_key: str = "") -> str:
+    title = title.strip()
+    m = DATE_PREFIX_RE.match(title)
+    if not m:
+        return title
+    meta = meta or {}
+    updated = _date_value(meta, "updated_at")
+    created = _date_value(meta, "created_at")
+    saved = _date_value(meta, "saved_at")
+    if m.group(1) != updated or m.group(2) != created:
+        return title
+    if root_key == "source_refinements":
+        rest = m.group(4).strip()
+        if saved and rest.startswith(saved + " "):
+            rest = rest[len(saved):].strip()
+        return rest
+    return m.group(4).strip()
+
+
+def safe_filename_stem(stem: str, max_len: int = 180) -> str:
+    stem = re.sub(r"[/:]", "：", stem).strip()
+    stem = re.sub(r"\s+", " ", stem)
+    if len(stem) <= max_len:
+        return stem
+    return stem[: max_len - 1].rstrip() + "…"
+
+
+def expected_freshness_stem(path: Path, meta: dict[str, Any], body: str, root_key: str = "") -> str:
+    created = _date_value(meta, "created_at")
+    updated = _date_value(meta, "updated_at")
+    saved = _date_value(meta, "saved_at")
+    base_title = strip_date_prefix(_body_title(body, path.stem), meta=meta, root_key=root_key)
+    if updated and created:
+        if root_key == "source_refinements":
+            saved = saved or recover_saved_at_from_source(meta)
+            if not saved:
+                return path.stem
+            return safe_filename_stem(f"{updated} {created} {saved} {base_title}")
+        return safe_filename_stem(f"{updated} {created} {base_title}")
+    return path.stem
+
+
+def filename_date_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    issues = []
+    scanned = 0
+    for root_key in ("source_refinements", "topic_pages", "reusable_assets", "outputs"):
+        root = kb_path(cfg, root_key)
+        for p in collect_markdown_files(root):
+            scanned += 1
+            raw = p.read_text("utf-8", errors="ignore")
+            meta, body = split_frontmatter(raw)
+            created = _date_value(meta, "created_at")
+            updated = _date_value(meta, "updated_at")
+            rel = str(p.relative_to(base))
+            if not created or not updated:
+                issues.append({"file": rel, "error": "missing_created_at_or_updated_at"})
+                continue
+            saved = _date_value(meta, "saved_at")
+            if root_key == "source_refinements":
+                recovered = recover_saved_at_from_source(meta)
+                if not saved:
+                    issues.append({"file": rel, "error": "missing_saved_at_for_source_refinement", "recovered_from_source_file": recovered})
+                elif recovered and saved != recovered:
+                    issues.append({"file": rel, "error": "saved_at_mismatch_source_file_date", "saved_at": saved, "source_file_date": recovered})
+            if updated < created:
+                issues.append({"file": rel, "error": "updated_at_before_created_at", "created_at": created, "updated_at": updated})
+            expected = expected_freshness_stem(p, meta, body, root_key=root_key)
+            m = DATE_PREFIX_RE.match(p.stem)
+            if not m:
+                issues.append({"file": rel, "error": "missing_filename_date_prefix", "expected_stem": expected})
+            elif m.group(1) != updated or m.group(2) != created:
+                issues.append({"file": rel, "error": "filename_dates_do_not_match_frontmatter", "expected_stem": expected})
+            elif root_key == "source_refinements" and m.group(3) != saved:
+                issues.append({"file": rel, "error": "filename_saved_at_does_not_match_frontmatter", "expected_stem": expected})
+            elif root_key != "source_refinements" and m.group(3):
+                issues.append({"file": rel, "error": "unexpected_saved_at_date_in_non_source_filename", "expected_stem": expected})
+            elif p.stem != expected:
+                issues.append({"file": rel, "error": "filename_title_does_not_match_body_title", "expected_stem": expected})
+    return {"files_scanned": scanned, "issue_count": len(issues), "issues": issues}
+
+
+def _replace_first_h1(body: str, new_title: str) -> str:
+    if re.search(r"(?m)^#\s+.+$", body):
+        return re.sub(r"(?m)^#\s+.+$", f"# {new_title}", body, count=1)
+    return f"# {new_title}\n\n{body.lstrip()}"
+
+
+def _update_wikilinks(text: str, title_map: dict[str, str]) -> str:
+    def repl(match: re.Match[str]) -> str:
+        inner = match.group(1)
+        target, sep, alias = inner.partition("|")
+        head, hash_sep, anchor = target.partition("#")
+        clean = head.strip()
+        if clean not in title_map:
+            return match.group(0)
+        new_target = title_map[clean]
+        if hash_sep:
+            new_target = f"{new_target}#{anchor}"
+        if sep:
+            return f"[[{new_target}|{alias}]]"
+        return f"[[{new_target}]]"
+    return re.sub(r"\[\[([^\]]+)\]\]", repl, text)
+
+
+def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_updated_at: bool = False) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    files = []
+    file_root_keys: dict[Path, str] = {}
+    for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs"):
+        for p in collect_markdown_files(kb_path(cfg, key)):
+            files.append(p)
+            file_root_keys[p] = key
+    planned = []
+    title_map: dict[str, str] = {}
+    for p in files:
+        raw = p.read_text("utf-8", errors="ignore")
+        meta, body = split_frontmatter(raw)
+        created = _date_value(meta, "created_at")
+        updated = _date_value(meta, "updated_at")
+        if not created or not updated:
+            continue
+        saved = _date_value(meta, "saved_at")
+        if touch_updated_at:
+            updated = date.today().isoformat()
+        if updated < created:
+            updated = created
+        root_key = file_root_keys.get(p, "")
+        if root_key == "source_refinements":
+            recovered_saved = recover_saved_at_from_source(meta)
+            if recovered_saved and saved != recovered_saved:
+                saved = recovered_saved
+        expected_stem = expected_freshness_stem(p, {**meta, "updated_at": updated, "created_at": created, "saved_at": saved}, body, root_key=root_key)
+        new_path = p.with_name(expected_stem + p.suffix)
+        old_stem = p.stem
+        if old_stem != expected_stem:
+            planned.append({"from": str(p.relative_to(base)), "to": str(new_path.relative_to(base))})
+            title_map[old_stem] = expected_stem
+        body_title = _body_title(body, old_stem)
+        if body_title != expected_stem:
+            title_map[body_title] = expected_stem
+        if root_key == "source_refinements":
+            recovered_saved = recover_saved_at_from_source(meta)
+            if recovered_saved and created and updated and recovered_saved != created:
+                base_title = strip_date_prefix(body_title, {**meta, "saved_at": recovered_saved}, root_key=root_key)
+                stale_alias = safe_filename_stem(f"{updated} {created} {created} {recovered_saved} {base_title}")
+                if stale_alias != expected_stem:
+                    title_map[stale_alias] = expected_stem
+                stale_alias_without_saved = safe_filename_stem(f"{updated} {created} {created} {base_title}")
+                if stale_alias_without_saved != expected_stem:
+                    title_map[stale_alias_without_saved] = expected_stem
+    if not apply:
+        return {"apply": False, "planned_renames": planned, "rename_count": len(planned)}
+    # First update frontmatter dates when updated_at < created_at and H1 titles.
+    for p in files:
+        raw = p.read_text("utf-8", errors="ignore")
+        meta, body = split_frontmatter(raw)
+        created = _date_value(meta, "created_at")
+        updated = _date_value(meta, "updated_at")
+        if not created or not updated:
+            continue
+        fixed = raw
+        root_key = file_root_keys.get(p, "")
+        if root_key == "source_refinements":
+            recovered_saved = recover_saved_at_from_source(meta)
+            if recovered_saved and _date_value(meta, "saved_at") != recovered_saved:
+                fixed = re.sub(r"(?m)^saved_at:\s*.*$", f'saved_at: "{recovered_saved}"', fixed, count=1)
+        if touch_updated_at:
+            today = date.today().isoformat()
+            fixed = re.sub(r"(?m)^updated_at:\s*.*$", f'updated_at: "{today}"', fixed, count=1)
+            updated = today
+        elif updated < created:
+            fixed = re.sub(r"(?m)^updated_at:\s*.*$", f'updated_at: "{created}"', fixed, count=1)
+            updated = created
+        meta2, body2 = split_frontmatter(fixed)
+        expected_stem = expected_freshness_stem(p, meta2, body2, root_key=root_key)
+        new_body = _replace_first_h1(body2, expected_stem)
+        if new_body != body2:
+            fm = fixed.split("---", 2)[1]
+            fixed = f"---{fm}---\n{new_body}"
+        p.write_text(fixed, encoding="utf-8")
+    # Rename files after content title updates.
+    for item in planned:
+        src = base / item["from"]
+        dst = base / item["to"]
+        if not src.exists():
+            continue
+        if dst.exists() and dst != src:
+            raise SystemExit(json.dumps({"error": "target_exists", "from": item["from"], "to": item["to"]}, ensure_ascii=False))
+        src.rename(dst)
+    # Refresh wikilinks in formal knowledge roots and system reports. Do not mutate backups.
+    refreshed_files = []
+    refresh_roots = [kb_path(cfg, key) for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs")]
+    reports_root = system_file(cfg, "quality-gate.md").parent
+    if reports_root.exists():
+        refresh_roots.append(reports_root)
+    seen_refresh: set[Path] = set()
+    for root in refresh_roots:
+        for p in collect_markdown_files(root):
+            if p in seen_refresh:
+                continue
+            seen_refresh.add(p)
+            raw = p.read_text("utf-8", errors="ignore")
+            new = _update_wikilinks(raw, title_map)
+            if new != raw:
+                p.write_text(new, encoding="utf-8")
+                refreshed_files.append(str(p.relative_to(base)))
+    return {"apply": True, "renamed": planned, "rename_count": len(planned), "wikilink_files_updated": refreshed_files}
+
+
 def relation_audit(cfg: dict[str, Any]) -> dict[str, Any]:
     base = Path(cfg["ai_knowledge_base"])
     roots = [kb_path(cfg, key) for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs")]
@@ -2014,6 +2246,7 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
             elif "updated_at:" not in raw:
                 rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
                 date_issues.append(rel)
+    filename_dates = filename_date_audit(cfg)
     yaml_issues = []
     for root_key in ("source_refinements", "topic_pages", "reusable_assets", "outputs"):
         root = kb_path(cfg, root_key)
@@ -2065,6 +2298,8 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         blockers.append({"gate": "template", "issue": "10_layer_field_mismatch_or_order", "count": len(template_issues)})
     if date_issues:
         blockers.append({"gate": "dates", "issue": "missing_created_at_or_updated_at", "count": len(date_issues)})
+    if filename_dates["issue_count"]:
+        blockers.append({"gate": "filename_dates", "issue": "filename_date_prefix_or_date_order_invalid", "count": filename_dates["issue_count"]})
     if yaml_issues:
         blockers.append({"gate": "yaml", "issue": "invalid_yaml_frontmatter", "count": len(yaml_issues)})
     if relation["unresolved_count"]:
@@ -2079,9 +2314,28 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         blockers.append({"gate": "assets", "issue": "asset_relation_or_type_issues", "count": assets["asset_issue_count"]})
     if assets["output_issue_count"]:
         blockers.append({"gate": "outputs", "issue": "missing_parent_topic_or_related_assets", "count": assets["output_issue_count"]})
-    # Check evidence_from in 20/30/40 artifacts
+    def evidence_minimum(root_key: str, meta: dict[str, Any], path: Path) -> int:
+        if root_key == "topic_pages":
+            if "MOC" in path.parts or "moc" in {part.lower() for part in path.parts}:
+                return 1
+            return 3
+        if root_key == "reusable_assets":
+            asset_type = str(meta.get("asset_type") or "").strip().lower()
+            if asset_type in {"case", "case-pattern", "anti-case", "expression", "definition", "distinction", "warning", "metaphor"}:
+                return 1
+            return 3
+        output_type = str(meta.get("output_type") or "").strip().lower()
+        status = str(meta.get("status") or "").strip().lower()
+        if output_type in {"review", "review-record", "复盘记录"} or status in {"review", "review_record"}:
+            return 1
+        if output_type in {"feynman", "费曼解释"}:
+            return 2
+        return 3
+
+    # Check evidence_from in 20/30/40 artifacts with artifact-specific thresholds.
     kb = Path(cfg["ai_knowledge_base"])
     evidence_missing = 0
+    evidence_insufficient = 0
     for root_key in ("topic_pages", "reusable_assets", "outputs"):
         root = kb_path(cfg, root_key)
         for p in collect_markdown_files(root):
@@ -2089,8 +2343,12 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
             ef = meta.get("evidence_from", meta.get("supported_by", []))
             if not isinstance(ef, list) or len(ef) == 0:
                 evidence_missing += 1
+            elif len(ef) < evidence_minimum(root_key, meta, p):
+                evidence_insufficient += 1
     if evidence_missing:
         blockers.append({"gate": "evidence", "issue": "artifacts_missing_evidence_from_refinements", "count": evidence_missing})
+    if evidence_insufficient:
+        blockers.append({"gate": "evidence", "issue": "artifacts_insufficient_evidence_for_type", "count": evidence_insufficient})
     needs_revision = [item for item in outputs if item["status"] != "usable"]
     if needs_revision:
         blockers.append({"gate": "output_quality", "issue": "outputs_need_revision", "count": len(needs_revision)})
@@ -2108,6 +2366,7 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         "warnings": warnings,
         "template_issues": template_issues,
         "date_issues": date_issues,
+        "filename_date_issues": filename_dates["issues"],
         "yaml_issues": yaml_issues,
         "summary": {
             "relations": {"unresolved": relation["unresolved_count"], "duplicate_aliases": len(relation["duplicate_aliases"])},
@@ -2120,6 +2379,7 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
             "outputs_blocked_by_review": output_review["blocking_review_count"],
             "verification_pending": verification["pending_count"],
             "verification_unresolved_outputs": verification["unresolved_output_count"],
+            "filename_date_issues": filename_dates["issue_count"],
         },
     }
 
@@ -2395,6 +2655,20 @@ def cmd_audit_topic_pages(args: argparse.Namespace) -> None:
     if args.apply:
         system_file(cfg, "topic-page-audit.md").write_text(render_topic_page_audit(result), encoding="utf-8")
     print(json.dumps({"written": str(system_file(cfg, "topic-page-audit.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+
+
+def cmd_audit_filename_dates(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = filename_date_audit(cfg)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def cmd_normalize_filename_dates(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = normalize_filename_dates(cfg, apply=args.apply, touch_updated_at=args.touch_updated_at)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_quality_gate(args: argparse.Namespace) -> None:
@@ -2720,6 +2994,16 @@ def main() -> None:
     p_topic_page_audit.add_argument("--config", required=True, type=Path)
     p_topic_page_audit.add_argument("--apply", action="store_true")
     p_topic_page_audit.set_defaults(func=cmd_audit_topic_pages)
+
+    p_filename_dates = sub.add_parser("audit-filename-dates")
+    p_filename_dates.add_argument("--config", required=True, type=Path)
+    p_filename_dates.set_defaults(func=cmd_audit_filename_dates)
+
+    p_normalize_filename_dates = sub.add_parser("normalize-filename-dates")
+    p_normalize_filename_dates.add_argument("--config", required=True, type=Path)
+    p_normalize_filename_dates.add_argument("--apply", action="store_true")
+    p_normalize_filename_dates.add_argument("--touch-updated-at", action="store_true", help="Set updated_at to today's date while normalizing filenames.")
+    p_normalize_filename_dates.set_defaults(func=cmd_normalize_filename_dates)
 
     p_quality_gate = sub.add_parser("quality-gate")
     p_quality_gate.add_argument("--config", required=True, type=Path)

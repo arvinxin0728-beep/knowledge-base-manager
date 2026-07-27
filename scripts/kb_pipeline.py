@@ -50,6 +50,17 @@ def system_dir(cfg: dict[str, Any]) -> Path:
     return Path(cfg["ai_knowledge_base"]) / cfg["mapping"]["system"]
 
 
+def system_active_file(cfg: dict[str, Any], name: str) -> Path:
+    root = system_dir(cfg)
+    active = root / "active" / name
+    fallback = root / name
+    if active.exists():
+        return active
+    if fallback.exists():
+        return fallback
+    return active
+
+
 def legacy_runtime_dir(cfg: dict[str, Any]) -> Path:
     return system_dir(cfg) / "runtime"
 
@@ -309,7 +320,7 @@ def discover(cfg: dict[str, Any], db: sqlite3.Connection) -> dict[str, int]:
 
 def reconcile_processed_index(cfg: dict[str, Any], db: sqlite3.Connection) -> int:
     """Import existing canonical index records into a newly created task ledger."""
-    index = system_dir(cfg) / "processed-index.jsonl"
+    index = system_active_file(cfg, "processed-index.jsonl")
     if not index.exists():
         return 0
     rows = index_rows(index)
@@ -514,24 +525,78 @@ def safe_name(value: str) -> str:
     return "".join(c for c in value if c not in '\\/:*?"<>|\n\r\t').strip()[:80] or "untitled"
 
 
+def date_value(value: Any) -> str:
+    text = str(value or "").strip().strip('"').strip("'")
+    if len(text) >= 10 and text[:10].count("-") == 2:
+        return text[:10]
+    return ""
+
+
+def source_saved_at(row: sqlite3.Row, metadata: dict[str, Any]) -> str:
+    explicit = date_value(metadata.get("saved_at"))
+    if explicit:
+        return explicit
+    name = Path(row["source_path"]).name
+    if len(name) >= 10 and name[:10].count("-") == 2:
+        return name[:10]
+    return ""
+
+
+def strip_leading_dates(value: str) -> str:
+    text = value.strip()
+    while len(text) > 11 and text[:10].count("-") == 2 and text[10].isspace():
+        text = text[11:].strip()
+    return text
+
+
+def dated_refinement_destination(cfg: dict[str, Any], row: sqlite3.Row, metadata: dict[str, Any]) -> Path:
+    dest = refinement_destination(cfg, row)
+    created = date_value(metadata.get("created_at")) or now()[:10]
+    updated = date_value(metadata.get("updated_at")) or created
+    saved = source_saved_at(row, metadata)
+    if not saved:
+        return dest
+    title = strip_leading_dates(str(metadata.get("title") or row["title"]))
+    return dest.with_name(f"{updated} {created} {saved} {safe_name(title)}.md")
+
+
 def with_canonical_frontmatter(row: sqlite3.Row, metadata: dict[str, Any], content: str) -> str:
     if content.lstrip().startswith("---\n"):
         return content
     topics = metadata.get("topics", [])
+    created = date_value(metadata.get("created_at")) or now()[:10]
+    updated = date_value(metadata.get("updated_at")) or created
+    saved = source_saved_at(row, metadata)
     lines = [
         "---",
-        f"source_id: {row['job_id']}",
-        f"source_type: {row['source_type']}",
-        f"source_file: {json.dumps(row['source_path'], ensure_ascii=False)}",
-        f"processed_at: {now()}",
         "stage: 来源精炼",
         "status: processed",
-        f"fact_risk: {metadata.get('fact_risk', 'unknown')}",
-        f"fact_check_required: {str(bool(metadata.get('fact_check_required', False))).lower()}",
-        "topics:",
+        f"theme_cluster: {json.dumps(str(metadata.get('theme_cluster') or (topics[0] if topics else '未归类')), ensure_ascii=False)}",
+        "tags:",
+        "  - 来源精炼",
     ]
     lines.extend(f"  - {json.dumps(str(topic), ensure_ascii=False)}" for topic in topics)
-    lines.extend(["---", "", content.lstrip()])
+    lines.extend([
+        "related_sources: []",
+        "related_topics: []",
+        "related_assets: []",
+        "related_outputs: []",
+        'moc: ""',
+        f"obsidian_links_updated: {json.dumps(updated, ensure_ascii=False)}",
+        f"account: {json.dumps(str(metadata.get('account') or ''), ensure_ascii=False)}",
+        f"author: {json.dumps(str(metadata.get('author') or ''), ensure_ascii=False)}",
+        f"processed_at: {json.dumps(now()[:10], ensure_ascii=False)}",
+        f"published_at: {json.dumps(date_value(metadata.get('published_at')), ensure_ascii=False)}",
+        f"saved_at: {json.dumps(saved, ensure_ascii=False)}",
+        f"source_file: {json.dumps(row['source_path'], ensure_ascii=False)}",
+        f"source_type: {json.dumps(row['source_type'], ensure_ascii=False)}",
+        f"url: {json.dumps(str(metadata.get('url') or ''), ensure_ascii=False)}",
+        f"created_at: {json.dumps(created, ensure_ascii=False)}",
+        f"updated_at: {json.dumps(updated, ensure_ascii=False)}",
+        "---",
+        "",
+        content.lstrip(),
+    ])
     return "\n".join(lines)
 
 
@@ -603,13 +668,13 @@ def commit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str) -> dict[str
     if errors:
         db.rollback()
         raise SystemExit(json.dumps({"committed": False, "errors": errors}, ensure_ascii=False))
-    dest = refinement_destination(cfg, row)
+    dest = dated_refinement_destination(cfg, row, metadata)
     if dest.exists() and Path(row["refinement_file"]).resolve() != dest.resolve():
         db.rollback()
         raise SystemExit(json.dumps({"committed": False, "error": "destination_exists", "existing_file": str(dest)}, ensure_ascii=False))
     content = with_canonical_frontmatter(row, metadata, refinement.read_text(encoding="utf-8"))
     atomic_write(dest, content)
-    index = system_dir(cfg) / "processed-index.jsonl"
+    index = system_active_file(cfg, "processed-index.jsonl")
     rows = index_rows(index)
     record = {
         "schema_version": 1, "source_id": job_id, "source_path": row["source_path"],
@@ -665,7 +730,7 @@ def adopt_existing(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, exi
     if row is None:
         db.rollback()
         raise SystemExit("unknown_job")
-    index = system_dir(cfg) / "processed-index.jsonl"
+    index = system_active_file(cfg, "processed-index.jsonl")
     rows = index_rows(index)
     matched = False
     deduplicated = []

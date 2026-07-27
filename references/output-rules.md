@@ -17,9 +17,17 @@ For token-cost tiers, human approval gates, and resumable checkpoints, read `pro
 
 Do not create assets or outputs only because a folder exists. Create them when the trigger in `asset-output-matrix.md` is present.
 
+Use two promotion lanes:
+
+- Heavy lane: topic pages, methods, frameworks, solution materials, article drafts, and decision memos. These need stronger evidence, usually 3+ source refinements, and explicit approval for high-cost generation.
+- Lightweight lane: cases, case patterns, anti-cases, expressions, definitions, distinctions, warnings, and metaphors. These may be generated from one strong source when attribution, source context, reuse context, and fact-risk boundary are explicit.
+- Navigation lane: MOC/index pages need traceability and meaningful routing, but they do not need the same 3-source synthesis threshold as topic pages.
+
 High-cost generation of topic pages, reusable assets, or outputs requires either an explicit user request for the exact artifact or approval of a candidate list. When approval is missing, create or update `asset-output-candidates.md` and stop at `waiting_for_approval`.
 
 Do not create a 30-layer asset unless a parent topic page exists or will be created in the same approved generation step. Do not create a 40-layer output unless it names its target reader or scenario and links to its source topic page.
+
+Before stopping at candidate review, avoid leaving items as `unclassified`. Split them into concrete pools: topic, case, expression, framework, method, output, and MOC split candidates.
 
 ## Portability Gate
 
@@ -42,6 +50,7 @@ For 30-layer assets, separate directory category from callable subtype:
 - `asset_type` answers how the artifact should be reused: `workflow`, `checklist`, `scoring-card`, `framework`, `expression`, and so on.
 - Do not use `方法论` or `methods` as a default `asset_type`; that hides whether the asset is a process, checklist, standard, template, or framework.
 - If a file in the Method directory is actually a model/map/layer structure, move it to the Framework Map directory or mark it for structure review.
+- For cases and expressions, a single source is allowed, but the body must clearly mark source context and fact boundary. Do not inflate a one-source case into a general rule.
 
 ## Promotion Review Rules
 
@@ -68,6 +77,8 @@ Score each topic cluster from 0 to 5.
 | Fact-risk control | Are claims low-risk, or are verification needs explicitly marked? | 1 |
 
 Repeated source count cannot score the reusability point by itself. A placeholder question generated from a tag cannot score the question-clarity point by itself.
+
+The 3-source scoring rule applies to topic and heavy-asset promotion. Lightweight case/expression promotion can happen from one strong source, but it should not by itself create a new topic page or heavy output.
 
 ### Promotion Actions
 

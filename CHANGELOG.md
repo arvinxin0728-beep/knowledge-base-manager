@@ -4,6 +4,26 @@ All notable changes to this project should be recorded here.
 
 The format follows Keep a Changelog conventions loosely, and this project uses semantic versioning while it is distributed publicly.
 
+## [0.1.3] - 2026-07-27
+
+### Added
+
+- Freshness filename rule for formal Markdown artifacts: source refinements use `updated_at created_at saved_at title.md`; topic pages, reusable assets, and outputs use `updated_at created_at title.md`.
+- `audit-filename-dates` command to verify freshness filenames and `updated_at >= created_at`.
+- `normalize-filename-dates` command to rename formal knowledge artifacts, update H1 titles, and migrate Obsidian wikilinks.
+- `--touch-updated-at` option for intentional full-library refreshes.
+- `quality-gate` blocker for freshness filename/date-order violations.
+
+### Changed
+
+- `SKILL.md` now requires `updated_at` and filename first date to be updated together whenever a formal knowledge artifact is modified.
+- `saved_at` semantics for source refinements clarified: it means original/source-library saved date, can be recovered from the canonical `source_file` filename prefix, and must not silently fall back to `created_at`, `updated_at`, `processed_at`, or publication date.
+
+### Fixed
+
+- Source-refinement freshness normalization now removes stale extra date prefixes when correcting polluted `saved_at` values, preventing filenames with four visible dates.
+- Wikilink refresh during freshness normalization no longer mutates system backup Markdown files.
+
 ## [0.1.0-beta] - 2026-07-22
 
 ## [0.1.1] - 2026-07-23
@@ -68,6 +88,8 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ### Added
 
+- Lightweight promotion lane for cases, expressions, definitions, distinctions, warnings, metaphors, and MOC split candidates.
+- Portfolio health flags for stagnant cases, expressions, MOCs/topic pages, and unresolved `unclassified` candidates.
 - `check-refinement` subcommand: single-file gate-10 check returning JSON, used by pipeline at submit/adopt-existing entry points.
 - `sync-relations` subcommand: auto-populate `related_sources` across all refinements based on `theme_cluster` matching.
 - Pipeline gate-10 enforcement: `submit` and `adopt-existing` reject refinements that fail gate-10 checks.
@@ -80,6 +102,7 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ### Changed
 
+- Evidence gate is now artifact-specific: heavy assets still require stronger multi-source evidence, while lightweight cases/expressions can use one strong attributed source with explicit reuse and fact-risk boundary.
 - All 354 source refinements standardized to 20-field template format (field order, tag normalization, YAML cleanup).
 - 147 inline array tags (`"[a", "b"]"`) fixed to proper YAML list items.
 - 140 verification queue items auto-resolved as stale (sources rewritten).

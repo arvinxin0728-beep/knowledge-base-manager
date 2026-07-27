@@ -22,7 +22,7 @@ Ask for explicit user approval before continuing when the next stage changes cos
 |---|---|---|
 | A. Large source batch | Processing a large batch, a new library, or an ambiguous source set. | Controls token and time cost. |
 | B. Topic structure change | Creating new topic structure, merging clusters, splitting clusters, or changing MOC organization. | Changes the knowledge map. |
-| C. High-cost asset/output generation | Creating or substantially rewriting 30-reusable-assets or 40-outputs from candidates. | Consumes judgment and may create reusable public artifacts. Every artifact must include `evidence_from` listing ≥3 supporting source refinements, or the quality-gate will block it. |
+| C. High-cost asset/output generation | Creating or substantially rewriting heavy 30-reusable-assets or 40-outputs from candidates. | Consumes judgment and may create reusable public artifacts. Heavy artifacts usually need `evidence_from` listing ≥3 supporting source refinements. Lightweight cases and expressions may use one strong source with explicit attribution and fact boundary. |
 | D. External verification | Browsing, fact-checking, or validating company, market, legal, medical, financial, or current claims. | Adds external dependency and may change conclusions. |
 | E. Destructive or source-library mutation | Deleting, moving, renaming, deduping, or normalizing source-library files. | Changes user-owned source material. |
 
@@ -127,6 +127,8 @@ Before Gate C high-cost generation, produce or update `asset-output-candidates.m
 - fact-risk level;
 - reason to generate now;
 - reason to defer if not approved.
+
+Candidate reports must classify opportunities instead of leaving them as `unclassified`. Use concrete pools: `topic_candidates`, `case_candidates`, `expression_candidates`, `framework_candidates`, `method_candidates`, `output_candidates`, and `moc_split_candidates`. For each item record `candidate_id`, `artifact_type`, `parent_topic`, `source_refs`, `evidence_strength`, `fact_risk`, and `recommended_action`.
 
 Do not generate the full artifact until the user approves the candidate or asks for that artifact directly.
 
