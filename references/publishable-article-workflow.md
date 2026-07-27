@@ -21,12 +21,15 @@ Add or update:
 - `publish_status: "ready_for_editorial_review"` unless the user explicitly asks for public release.
 - `publish_angle`: the core public-facing angle in one sentence.
 - `hook_type`: one of `problem`, `story`, `contrarian`, `checklist`, `case`, `trend`.
-- `title_candidates`: 3-5 candidate titles.
-- `key_scenes`: 2-4 concrete scenes or examples used in the body.
-- `memorable_lines`: 5-8 reusable lines from the article.
-- `fact_check_items`: concrete claims that must be verified before external publishing.
 
 Keep `fact_check_required: true` when claims depend on public-account articles, product capability descriptions, company events, report claims, market data, rankings, or numbers.
+
+Keep Obsidian Properties compact. Do not put long publication planning lists in frontmatter. The following items must live in body sections instead of YAML:
+
+- `## 标题候选`: 3-5 candidate titles.
+- `## 关键场景`: 2-4 concrete scenes or examples used in the body.
+- `## 可复用金句`: 5-8 reusable lines from the article.
+- `## 发布前核查`: concrete claims that must be verified before external publishing.
 
 ## Rewrite sequence
 

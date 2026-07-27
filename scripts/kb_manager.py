@@ -1456,12 +1456,12 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
     has_counterpoint = bool(re.search(r"但是|反过来|误区|不是.*而是|真正的问题|矛盾", draft_body))
     has_actionable_end = bool(re.search(r"最后|所以|建议|下一步|你可以|行动|清单", draft_body[-800:]))
     has_fact_boundary = "fact_check_required" in text or "核查" in text or "事实边界" in text
-    has_title_candidates = "title_candidates:" in text or bool(_section_text(body, "标题候选"))
+    has_title_candidates = bool(_section_text(body, "标题候选"))
     has_publish_angle = "publish_angle:" in text or bool(_section_text(body, "发布角度"))
-    has_key_scenes = "key_scenes:" in text or bool(_section_text(body, "关键场景"))
+    has_key_scenes = bool(_section_text(body, "关键场景"))
     memorable_lines = _section_text(body, "可复用金句")
-    has_memorable_lines = "memorable_lines:" in text or len(re.findall(r"(?m)^-\s+", memorable_lines)) >= 5
-    has_publish_fact_check = "fact_check_items:" in text or bool(_section_text(body, "发布前核查"))
+    has_memorable_lines = len(re.findall(r"(?m)^-\s+", memorable_lines)) >= 5
+    has_publish_fact_check = bool(_section_text(body, "发布前核查"))
     checks = {
         "article_body_1500_zh": zh_chars >= 1500,
         "article_body_2500_zh": zh_chars >= 2500,
