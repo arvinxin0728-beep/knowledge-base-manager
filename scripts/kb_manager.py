@@ -1675,7 +1675,20 @@ def strip_date_prefix(title: str, meta: dict[str, Any] | None = None, root_key: 
         if saved and rest.startswith(saved + " "):
             rest = rest[len(saved):].strip()
         return rest
-    return m.group(4).strip()
+    rest = m.group(4).strip()
+    # Non-source layers use only updated_at + created_at in filenames.
+    # If an earlier source-style or already-normalized prefix left extra date
+    # tokens in the title, peel them recursively so re-runs are idempotent.
+    while True:
+        nested = DATE_PREFIX_RE.match(rest)
+        if nested:
+            rest = nested.group(4).strip()
+            continue
+        leading_dates = re.match(r"^(?:\d{4}-\d{2}-\d{2}\s+)+(.+)$", rest)
+        if leading_dates:
+            rest = leading_dates.group(1).strip()
+            continue
+        return rest
 
 
 def safe_filename_stem(stem: str, max_len: int = 180) -> str:
