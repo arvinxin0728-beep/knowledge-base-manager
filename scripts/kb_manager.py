@@ -1462,13 +1462,18 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
     has_fact_boundary = "fact_check_required" in text or "核查" in text or "事实边界" in text
     has_title_candidates = bool(_section_text(body, "标题候选"))
     editorial_card = _section_text(body, "发布编辑卡片")
+    has_article_genre = _has_subheading(editorial_card, "文章体裁")
     has_publish_angle = (
         "publish_angle:" in text
         or bool(_section_text(body, "发布角度"))
         or _has_subheading(editorial_card, "选题切口")
         or _has_subheading(editorial_card, "选题角度")
     )
-    has_key_scenes = bool(_section_text(body, "关键场景")) or _has_subheading(editorial_card, "关键素材")
+    has_key_scenes = (
+        bool(_section_text(body, "关键场景"))
+        or _has_subheading(editorial_card, "关键证据/素材")
+        or _has_subheading(editorial_card, "关键素材")
+    )
     memorable_lines = _section_text(body, "可复用金句")
     has_memorable_lines = len(re.findall(r"(?m)^-\s+", memorable_lines)) >= 5
     has_publish_fact_check = bool(_section_text(body, "发布前核查"))
@@ -1483,6 +1488,7 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
         "article_has_counterpoint": has_counterpoint,
         "article_has_actionable_end": has_actionable_end,
         "article_has_fact_boundary": has_fact_boundary,
+        "article_has_genre": has_article_genre,
         "article_has_title_candidates": has_title_candidates,
         "article_has_publish_angle": has_publish_angle,
         "article_has_key_scenes": has_key_scenes,
@@ -1498,6 +1504,7 @@ def _article_maturity(text: str, body: str) -> tuple[str, dict[str, bool]]:
         and has_counterpoint
         and has_actionable_end
         and has_fact_boundary
+        and has_article_genre
         and has_title_candidates
         and has_publish_angle
         and has_key_scenes
@@ -1761,15 +1768,19 @@ def _body_title(body: str, fallback: str) -> str:
 
 def strip_date_prefix(title: str, meta: dict[str, Any] | None = None, root_key: str = "") -> str:
     title = title.strip()
-    m = DATE_PREFIX_RE.match(title)
-    if not m:
-        return title
     meta = meta or {}
     updated = _date_value(meta, "updated_at")
     created = _date_value(meta, "created_at")
     saved = _date_value(meta, "saved_at")
+    m = DATE_PREFIX_RE.match(title)
+    if not m:
+        leading_dates = re.match(r"^(?:\d{4}-\d{2}-\d{2}\s+)+(.+)$", title)
+        return leading_dates.group(1).strip() if leading_dates else title
     if m.group(1) != updated or m.group(2) != created:
-        return title
+        # Older normalized titles may start with a previous updated/created
+        # pair. Strip date-like prefixes anyway so changing updated_at is
+        # idempotent and does not create filenames with four dates.
+        return strip_date_prefix(m.group(4).strip(), meta=meta, root_key=root_key)
     if root_key == "source_refinements":
         rest = m.group(4).strip()
         if saved and rest.startswith(saved + " "):
