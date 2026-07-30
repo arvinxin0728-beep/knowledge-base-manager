@@ -1,6 +1,8 @@
 # Publishable Article Workflow
 
-Use this reference when upgrading a `40-outputs` article from `article_draft` to `publishable_draft`.
+Use this reference when upgrading a `40-outputs` article from `article_draft` to `publishable_draft`, or from `publishable_draft` to `editorial_ready`.
+
+For editorial judgment beyond mechanical structure, also read `editorial-quality-and-output-maturity.md`.
 
 ## Entry gate
 
@@ -11,13 +13,25 @@ Only upgrade an article when:
 - The article has a source theme or topic page.
 - The user explicitly asks for publication-level polishing, or the article is an approved output candidate.
 
-If the article is still `article_seed`, expand it to `article_draft` first. Do not skip directly from seed to publishable.
+If the article is still `idea_seed`, `argument_draft`, or `article_seed`, expand it step by step. Do not skip directly from seed to publishable.
+
+Before polishing prose, run the argument draft gate:
+
+- core thesis is explicit;
+- there are at least three supporting argument moves;
+- each main argument has evidence, example, or reasoning;
+- there is a counterpoint, misconception, tradeoff, or limitation;
+- the reader's expected judgment change is clear;
+- fact boundaries and verification needs are explicit.
+
+If the argument gate fails, repair the argument instead of making the prose longer.
 
 ## Required frontmatter
 
 Add or update:
 
-- `article_maturity: "publishable_draft"`
+- `article_maturity: "publishable_draft"` when close to publication but still awaiting editorial/fact review.
+- `article_maturity: "editorial_ready"` only when editorial-quality audit is strong and publication-risk facts are verified or explicitly bounded.
 - `publish_status: "ready_for_editorial_review"` unless the user explicitly asks for public release.
 - `publish_angle`: the core public-facing angle in one sentence.
 - `hook_type`: one of `problem`, `story`, `contrarian`, `checklist`, `case`, `trend`.
@@ -200,12 +214,21 @@ A `publishable_draft` should satisfy:
 - Fact boundary and evidence boundary.
 - No local path, private folder code, or implementation-specific directory name in the main methodology body unless marked as an implementation example.
 
+An `editorial_ready` article should additionally satisfy:
+
+- `audit-editorial-quality` marks it `publishable` or a human editor explicitly accepts the remaining risks.
+- The argument gate passes.
+- P0 evidence gaps are filled, downgraded, or explicitly bounded.
+- High-risk claims have verification results or have been removed.
+- The ending gives a concrete reader judgment, action, or decision.
+
 ## Review result
 
 After rewriting, run:
 
 ```bash
 python3 scripts/kb_manager.py evaluate-outputs --config <kb-config> --apply
+python3 scripts/kb_manager.py audit-editorial-quality --config <kb-config> --apply
 python3 scripts/kb_manager.py record-output-review --config <kb-config> --file "<relative-file>" --status usable --scores '{"argument_clarity":5,"evidence_strength":4,"portability":5,"scope_control":4,"actionability":5,"reuse_value":5}' --note "publishable_draft review..." --apply-status
 python3 scripts/kb_manager.py quality-gate --config <kb-config> --apply --strict
 ```

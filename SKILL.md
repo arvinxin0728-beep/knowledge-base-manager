@@ -50,8 +50,13 @@ This skill is designed to work as a single installed package. A normal installat
 The package should remain usable beyond Codex. Codex reads `SKILL.md` as the native entrypoint; other agent platforms may use this package as an instruction bundle plus deterministic local scripts. Keep platform-specific behavior isolated in adapters or installation notes, not in the universal workflow model.
 
 - Use `references/reading-and-refinement.md` whenever reading, refining, synthesizing, or outputting from books, ebooks, public-account articles, webpages, newsletters, Markdown, PDF, EPUB, DOCX, HTML, TXT, or copied article text.
+- Use `references/source-intake-and-extraction.md` whenever system-found evidence, PDFs, OCR-prone files, unsupported formats, extraction failures, garbled text, or uncertain source readability may affect whether a source can enter source refinements.
+- Use `references/source-quality-and-weighting.md` whenever judging source type, source credibility, freshness, evidence strength, or weighted promotion from source refinements into 20/30/40 artifacts.
+- Use `references/evidence-gap-and-bounded-fill.md` whenever a topic page, asset, or output lacks enough authoritative, fresh, diverse, or primary evidence and needs bounded evidence filling rather than open-ended research.
 - Use `references/asset-output-matrix.md` whenever deciding whether a source, topic page, batch, or active project should produce reusable assets such as methods, cases, expressions, framework maps, or outputs such as Feynman explanations, article drafts, solution materials, decision memos, and review records.
+- Use `references/editorial-quality-and-output-maturity.md` whenever judging whether outputs have insight, argument strength, reader value, publication maturity, or need revision beyond mechanical structure checks.
 - Use `references/publishable-article-workflow.md` whenever upgrading an article draft from `article_draft` to `publishable_draft`.
+- Use `references/lifecycle-and-health.md` whenever auditing promotion/demotion, lifecycle status, health status, stale knowledge, rollback, or periodic knowledge health review.
 - Use `references/promotion-control-and-resume.md` whenever a request may cross stages, consume high token cost, require human approval, or need to resume after a pause or termination.
 - Use `scripts/ebook_probe.py` for deterministic text extraction from supported local files.
 - Use `references/official-account-library.md` when a mapped source library is a WeChat/公众号 Markdown library that needs auditing, importing, flattening, deduping, or filename normalization.
@@ -126,11 +131,23 @@ Use:
 ```bash
 python3 scripts/kb_manager.py audit-filename-dates --config <config>
 python3 scripts/kb_manager.py normalize-filename-dates --config <config> --apply
+python3 scripts/kb_manager.py audit-source-quality --config <config> --apply
+python3 scripts/kb_manager.py audit-evidence-gaps --config <config> --apply
+python3 scripts/kb_manager.py init-evidence-intake --config <config> --apply
+python3 scripts/kb_manager.py audit-evidence-intake --config <config> --apply
+python3 scripts/kb_manager.py audit-editorial-quality --config <config> --apply
+python3 scripts/kb_manager.py audit-lifecycle --config <config> --apply
+python3 scripts/kb_manager.py audit-knowledge-health --config <config> --apply
+python3 scripts/kb_manager.py init-lifecycle-health --config <config> --apply
 ```
 
 When intentionally reprocessing or globally refreshing existing knowledge artifacts, add `--touch-updated-at` so every touched artifact receives today's `updated_at` and filename update date.
 
 `quality-gate --strict` must block when freshness filenames are missing, filename dates do not match frontmatter, or `updated_at < created_at`.
+
+`quality-gate` should also surface lifecycle and health warnings for formal topic pages, reusable assets, and outputs. Do not automatically demote, archive, move, or delete artifacts from a warning alone; use lifecycle and health reports to decide the next safe action.
+
+Use `init-lifecycle-health --apply` only when the user approves initializing existing 20/30/40 artifacts. It fills missing lifecycle/health fields, marks health as `review_due` rather than `healthy`, updates `updated_at`, normalizes freshness filenames, and refreshes wikilinks.
 
 ## Core Workflow
 
