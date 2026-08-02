@@ -2557,7 +2557,7 @@ def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_upd
         src.rename(dst)
     # Refresh wikilinks in formal knowledge roots and system reports. Do not mutate backups.
     refreshed_files = []
-    date_touched_by_link_refresh = []
+    link_refresh_metadata_updated = []
     refresh_roots = [kb_path(cfg, key) for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs")]
     formal_roots = {kb_path(cfg, key).resolve(): key for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs")}
     reports_root = system_file(cfg, "quality-gate.md").parent
@@ -2579,15 +2579,22 @@ def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_upd
                     except OSError:
                         in_formal_root = False
                     today = date.today().isoformat()
-                    if in_formal_root and re.search(r"(?m)^updated_at:\s*.*$", new) and _date_value(split_frontmatter(new)[0], "updated_at") != today:
-                        new = re.sub(r"(?m)^updated_at:\s*.*$", f'updated_at: "{today}"', new, count=1)
-                        date_touched_by_link_refresh.append(str(p.relative_to(base)))
+                    if in_formal_root:
+                        refreshed, changed = _set_frontmatter_field(new, "obsidian_links_updated", today, after_keys=["moc", "related_outputs", "related_assets", "related_topics", "related_sources"])
+                        if changed:
+                            new = refreshed
+                            link_refresh_metadata_updated.append(str(p.relative_to(base)))
                 p.write_text(new, encoding="utf-8")
                 refreshed_files.append(str(p.relative_to(base)))
-    followup = None
-    if date_touched_by_link_refresh:
-        followup = normalize_filename_dates(cfg, apply=True, touch_updated_at=False, update_link_refresh_dates=False)
-    return {"apply": True, "renamed": planned, "rename_count": len(planned), "wikilink_files_updated": refreshed_files, "date_touched_by_link_refresh": date_touched_by_link_refresh, "followup": followup}
+    return {
+        "apply": True,
+        "renamed": planned,
+        "rename_count": len(planned),
+        "wikilink_files_updated": refreshed_files,
+        "link_refresh_metadata_updated": link_refresh_metadata_updated,
+        "date_touched_by_link_refresh": [],
+        "followup": None,
+    }
 
 
 def relation_audit(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -3000,6 +3007,7 @@ def _preferred_source_types(gap_types: list[str]) -> list[str]:
 def evidence_gap_audit(cfg: dict[str, Any]) -> dict[str, Any]:
     base = Path(cfg["ai_knowledge_base"])
     quality_index = _source_quality_by_title(cfg)
+    verification_results = latest_verification_results(cfg)
     gaps = []
     type_counts: Counter[str] = Counter()
     priority_counts: Counter[str] = Counter()
@@ -3034,8 +3042,12 @@ def evidence_gap_audit(cfg: dict[str, Any]) -> dict[str, Any]:
         if has_high_risk(text) and not any(m in {"primary_data", "cited_report"} or ch in {"official_doc", "paper", "report"} for m, ch in zip(modes, channels)):
             gap_types.append("high_fact_risk_without_primary_evidence")
             reasons.append("artifact has high-risk factual signals without primary/report evidence")
+        rel = str(p.relative_to(base))
+        verification_id = hashlib.sha256(rel.encode("utf-8")).hexdigest()[:16]
+        verification_status = str(verification_results.get(verification_id, {}).get("status") or "")
+        publication_fact_support_closed = verification_status in {"verified", "not_applicable"}
         maturity = str(meta.get("article_maturity") or "").lower()
-        if root_key == "outputs" and maturity == "publishable_draft" and has_high_risk(text):
+        if root_key == "outputs" and maturity == "publishable_draft" and has_high_risk(text) and not publication_fact_support_closed:
             gap_types.append("publishable_output_needs_fact_support")
             reasons.append("publishable draft still needs publication-grade fact support")
         if source_records and sum(weights) < minimum * 0.8:
@@ -3048,7 +3060,6 @@ def evidence_gap_audit(cfg: dict[str, Any]) -> dict[str, Any]:
             type_counts[t] += 1
         priority = _gap_priority(root_key, gap_types, meta)
         priority_counts[priority] += 1
-        rel = str(p.relative_to(base))
         gap_id = hashlib.sha256((rel + "|" + ",".join(gap_types)).encode("utf-8")).hexdigest()[:12]
         if "thin_evidence" in gap_types or "missing_authoritative_source" in gap_types:
             action = "bounded_evidence_fill"

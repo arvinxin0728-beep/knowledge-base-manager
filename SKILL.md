@@ -56,7 +56,9 @@ The package should remain usable beyond Codex. Codex reads `SKILL.md` as the nat
 - Use `references/asset-output-matrix.md` whenever deciding whether a source, topic page, batch, or active project should produce reusable assets such as methods, cases, expressions, framework maps, or outputs such as Feynman explanations, article drafts, solution materials, decision memos, and review records.
 - Use `references/editorial-quality-and-output-maturity.md` whenever judging whether outputs have insight, argument strength, reader value, publication maturity, or need revision beyond mechanical structure checks.
 - Use `references/publishable-article-workflow.md` whenever upgrading an article draft from `article_draft` to `publishable_draft`.
+- Use `references/publication-candidate-handoff.md` whenever selecting scheduled public-account/WeChat publication candidates from 40 outputs, deciding whether a candidate is ready for downstream article editing/layout, or handing a knowledge output to a channel-specific publishing skill.
 - Use `references/lifecycle-and-health.md` whenever auditing promotion/demotion, lifecycle status, health status, stale knowledge, rollback, or periodic knowledge health review.
+- Use `references/verified-closed-loops.md` whenever continuing an audit after evidence-fill, health-review, demotion, rollback, or link-maintenance behavior has already been validated and should be applied as a repeatable closed loop.
 - Use `references/promotion-control-and-resume.md` whenever a request may cross stages, consume high token cost, require human approval, or need to resume after a pause or termination.
 - Use `scripts/ebook_probe.py` for deterministic text extraction from supported local files.
 - Use `references/official-account-library.md` when a mapped source library is a WeChat/公众号 Markdown library that needs auditing, importing, flattening, deduping, or filename normalization.
@@ -122,8 +124,10 @@ Rules:
 - Every 10/source-refinement artifact must include `saved_at`. If an older source lacks `saved_at`, recover it from the canonical `source_file` filename date prefix when available.
 - Never use `created_at`, `updated_at`, `processed_at`, or publication date as a silent fallback for `saved_at`. If the original saved date cannot be recovered, leave the item for manual review and let `audit-filename-dates` / `quality-gate --strict` report it.
 - `updated_at` must be greater than or equal to `created_at`.
-- Whenever a 10/20/30/40 artifact body, frontmatter, links, or knowledge judgment is updated, update `updated_at` to the current date and rename the file so the first filename date matches the new `updated_at`.
+- Whenever a 10/20/30/40 artifact body, frontmatter, semantic links, or knowledge judgment is updated, update `updated_at` to the current date and rename the file so the first filename date matches the new `updated_at`.
 - When a file is renamed for freshness, all Obsidian wikilinks pointing to the old title must be migrated to the new title while preserving aliases.
+- Pure wikilink target migration is link maintenance, not a knowledge update. When a backlink file is changed only because another file was renamed, do not update that backlink file's `updated_at` and do not rename that backlink file. Record the maintenance date in `obsidian_links_updated` instead.
+- Use `updated_at` for knowledge freshness, `obsidian_links_updated` for link-maintenance freshness, and system reports or ledgers for batch maintenance traces. Do not let system maintenance make stale knowledge appear newly updated.
 - Do not apply this filename rule to system reports and ledgers under the system folder unless they are formal knowledge artifacts.
 
 Use:
@@ -364,7 +368,7 @@ Before finalizing work:
    a. Run `quality-gate --strict` and `gate-10 --strict` — include the results in the response.
    b. When fixing one instance of a problem, identify its category (YAML format, field ordering, broken wikilink, etc.) and scan the entire knowledge base for other files with the same category of issue. Fix all instances before reporting done.
    c. For any file that was created or modified, run a pre-delivery self-check against the relevant quality standard (template field order for 10-layer, format match against an existing file for 20/30/40, YAML parse validation, etc.).
-18. Every created or modified 10/20/30/40 knowledge artifact must record the update date in frontmatter as `updated_at: "YYYY-MM-DD"`. This applies to body edits, relation/link refreshes, metadata changes, status changes, evidence updates, and batch scripts that actually change file content. New artifacts must include both `created_at` and `updated_at`. Read-only audits do not change `updated_at`. Append-only runtime logs keep their own event `timestamp` instead of forcing `updated_at`.
+18. Every created or modified 10/20/30/40 knowledge artifact must record the update date in frontmatter as `updated_at: "YYYY-MM-DD"`. This applies to body edits, semantic relation changes, metadata changes, status changes, evidence updates, and batch scripts that actually change knowledge content or judgment. New artifacts must include both `created_at` and `updated_at`. Read-only audits do not change `updated_at`. Pure wikilink target migration is link maintenance only: record `obsidian_links_updated` when needed, but do not update `updated_at` or rename the backlink file. Append-only runtime logs keep their own event `timestamp` instead of forcing `updated_at`.
 19. Before writing any 10/20/30/40 artifact (source refinement, topic page, reusable asset, or output), open at least one existing file of the same type that is known to be correct. Match its frontmatter field order, body section names, tag style, and wikilink format exactly. Do not write from memory or impression. Match its frontmatter field order, body section names and structure, tag format, and wikilink style exactly. Do not write from memory or impression.
 20. After every promotion review, run a portfolio balance check. If cases, expressions, MOCs, or topic pages are stagnant while methods/frameworks keep growing, create a deficiency report and split opportunities into `case_candidates`, `expression_candidates`, `moc_split_candidates`, `framework_candidates`, `method_candidates`, and `output_candidates` before generating more heavy assets.
 
@@ -419,6 +423,7 @@ For an 8XX setup, prefer the example in `examples/profiles/8xx/profile.md`. Pers
 - `LICENSE`, `CHANGELOG.md`, `SECURITY.md`: public distribution license, version history, and security/privacy boundary.
 - `references/output-rules.md`: source refinement, topic-page, asset, and output boundaries.
 - `references/publishable-article-workflow.md`: publication-level article rewrite workflow, required metadata, title/hook/scenes/memorable-lines/fact-check gates, and review commands for upgrading `article_draft` to `publishable_draft`.
+- `references/publication-candidate-handoff.md`: candidate selection, evidence-risk gating, and handoff contract from 40 outputs to channel-specific publishing/layout skills.
 - `references/feynman-template.md`: standardized Feynman explanation template with required frontmatter fields and body sections (场景, 核心观点, 一句话解释, 用普通话说清楚, 简单测试, 事实边界, 关联知识).
 - `references/asset-output-matrix.md`: trigger matrix and quality standards for methods, cases, expressions, framework maps, Feynman explanations, article drafts, solution materials, decision memos, and review records.
 - `references/schema.md`: canonical processed-index schema and normalization rules.
