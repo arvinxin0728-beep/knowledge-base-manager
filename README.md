@@ -111,6 +111,8 @@ Knowledge-System/
 - `asset-output-candidates.md`：资产和输出候选
 - `quality-gate.md`：质量管理综合门禁
 - `gate-10.md`：精炼层质量门禁结果（结构 + 内容 + 批次检查）
+- `lifecycle-audit.md`：晋升后知识的生命周期、回退和降级建议
+- `knowledge-health.md`：正式知识的定期健康度复审结果
 
 这一层主要给系统和操作者看，不是正式知识内容。
 
@@ -142,9 +144,17 @@ YYYY-MM-DD YYYY-MM-DD Title.md
 python3 scripts/kb_manager.py audit-filename-dates --config <config>
 python3 scripts/kb_manager.py normalize-filename-dates --config <config> --apply
 python3 scripts/kb_manager.py normalize-filename-dates --config <config> --touch-updated-at --apply
+python3 scripts/kb_manager.py audit-source-quality --config <config> --apply
+python3 scripts/kb_manager.py audit-evidence-gaps --config <config> --apply
+python3 scripts/kb_manager.py init-evidence-intake --config <config> --apply
+python3 scripts/kb_manager.py audit-evidence-intake --config <config> --apply
+python3 scripts/kb_manager.py audit-editorial-quality --config <config> --apply
+python3 scripts/kb_manager.py audit-lifecycle --config <config> --apply
+python3 scripts/kb_manager.py audit-knowledge-health --config <config> --apply
+python3 scripts/kb_manager.py init-lifecycle-health --config <config> --apply
 ```
 
-`quality-gate --strict` 会阻塞缺失新鲜度文件名、文件名日期与 frontmatter 不一致，或 `updated_at < created_at` 的情况。
+`quality-gate --strict` 会阻塞缺失新鲜度文件名、文件名日期与 frontmatter 不一致，或 `updated_at < created_at` 的情况。生命周期和健康度问题默认作为 warning 暴露，先给出回退、修订、补证据、复审或归档建议，不自动移动或删除知识。`init-lifecycle-health --apply` 用于初始化旧知识的治理字段；它会把健康状态设为 `review_due`，而不是直接假定为 `healthy`。
 
 ### 10-source-refinements
 
@@ -406,7 +416,7 @@ python3 scripts/kb_manager.py doctor --config /absolute/path/to/AI-Knowledge-Bas
 审计这个知识库的 20、30、40 是否健康
 ```
 
-系统会检查关系、双链、主题过载、资产失衡、输出质量、事实核查状态等。
+系统会检查关系、双链、主题过载、资产失衡、输出质量、事实核查状态、生命周期状态和定期健康度。知识晋升不是单向过程；已经晋升的主题页、资产和输出也可能因为证据不足、结构失败、过时、重复、低复用或被新知识替代而进入 `needs_revision`、`needs_evidence`、`parked`、`superseded`、`deprecated` 或 `archived`。
 
 ## 和普通总结工具的区别
 

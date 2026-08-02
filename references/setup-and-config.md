@@ -39,6 +39,7 @@ Knowledge-System/
     │   │   ├── verification-queue.jsonl
     │   │   ├── verification-results.jsonl
     │   │   ├── output-review-results.jsonl
+    │   │   ├── evidence-fill-ledger.jsonl
     │   │   ├── rules.md
     │   │   └── topics.md
     │   ├── reports/                        # 可重新生成的快照
@@ -54,15 +55,24 @@ Knowledge-System/
     │   │   ├── topic-page-audit.md
     │   │   ├── relation-audit.md
     │   │   ├── asset-relation-audit.md
+    │   │   ├── evidence-gap-registry.md
+    │   │   ├── evidence-intake-audit.md
+    │   │   ├── source-capabilities.md
     │   │   └── inbox-review.md
-    │   └── backups/                        # 自动备份（保留最近5份，超出轮转）
-    │       └── ... (processed-index.jsonl.20260723, etc.)
-    │   ├── inbox-review.md
+    │   ├── evidence-intake/                # 系统主动补证候选区，未通过抽取质检前不得进入10
+    │   │   ├── candidates/
+    │   │   ├── extracted/
+    │   │   ├── needs-ocr/
+    │   │   ├── needs-manual-review/
+    │   │   └── rejected/
+    │   ├── backups/                        # 自动备份（保留最近5份，超出轮转）
+    │   │   └── ... (processed-index.jsonl.20260723, etc.)
     │   └── stubs/
     ├── 10-source-refinements/
     │   ├── ebooks/
     │   ├── articles/
-    │   └── public-accounts/
+    │   ├── public-accounts/
+    │   └── system-evidence-fill/           # 系统主动补证来源，和人工保存来源分开
     ├── 20-topic-pages/
     │   ├── pages/
     │   └── moc/

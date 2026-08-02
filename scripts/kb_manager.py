@@ -154,6 +154,15 @@ HIGH_RISK_PATTERNS = {
     "forecast": r"预测|预计|未来\d+年",
 }
 
+LIFECYCLE_STATUSES = {
+    "candidate", "draft", "active", "needs_revision", "needs_evidence",
+    "parked", "superseded", "deprecated", "archived",
+}
+HEALTH_STATUSES = {
+    "healthy", "review_due", "stale", "weak_evidence", "conflicted",
+    "low_reuse", "deprecated",
+}
+
 
 def load_config(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
@@ -240,7 +249,8 @@ _SYSTEM_ACTIVE_FILES = {
     'processed-index.jsonl', 'active-run-state.json', 'run-log.jsonl',
     'promotion-decision.jsonl', 'verification-queue.jsonl',
     'verification-results.jsonl', 'output-review-results.jsonl',
-    'kb-config.json', 'obsidian-taxonomy.json', 'rules.md', 'topics.md',
+    'evidence-fill-ledger.jsonl', 'kb-config.json', 'obsidian-taxonomy.json',
+    'rules.md', 'topics.md',
 }
 
 _SYSTEM_REPORT_FILES = {
@@ -248,7 +258,10 @@ _SYSTEM_REPORT_FILES = {
     'quality-gate.md', 'gate-10.md', 'verification-status.md',
     'output-quality-review.md', 'output-review-status.md',
     'portability-audit.md', 'topic-page-audit.md', 'relation-audit.md',
-    'asset-relation-audit.md', 'inbox-review.md',
+    'asset-relation-audit.md', 'lifecycle-audit.md', 'knowledge-health.md',
+    'source-quality-audit.md', 'evidence-gap-registry.md',
+    'editorial-quality-review.md',
+    'evidence-intake-audit.md', 'source-capabilities.md', 'inbox-review.md',
 }
 
 
@@ -321,6 +334,10 @@ def ensure_system_files(cfg: dict[str, Any]) -> None:
         "output-quality-review.md": "# Output Quality Review\n\n",
         "output-review-results.jsonl": "",
         "output-review-status.md": "# Output Review Status\n\n",
+        "evidence-fill-ledger.jsonl": "",
+        "editorial-quality-review.md": "# Editorial Quality Review\n\n",
+        "evidence-intake-audit.md": "# Evidence Intake Audit\n\n",
+        "source-capabilities.md": "# Source Capabilities\n\n",
         "inbox-review.md": "# Inbox Review\n\n",
         "rules.md": (
             "# Knowledge Base Rules\n\n"
@@ -357,6 +374,161 @@ def ensure_tree(cfg: dict[str, Any]) -> None:
     for sub in cfg.get("output_subdirs", {}).values():
         (kb_path(cfg, "outputs") / sub).mkdir(parents=True, exist_ok=True)
     ensure_system_files(cfg)
+
+
+def evidence_intake_root(cfg: dict[str, Any]) -> Path:
+    return kb_path(cfg, "system") / "evidence-intake"
+
+
+def system_evidence_refinement_root(cfg: dict[str, Any]) -> Path:
+    subdir = cfg.get("source_refinement_subdirs", {}).get("system_evidence_fill", "系统补证")
+    return kb_path(cfg, "source_refinements") / subdir
+
+
+def evidence_intake_expected_dirs(cfg: dict[str, Any]) -> dict[str, list[Path]]:
+    intake = evidence_intake_root(cfg)
+    fill = system_evidence_refinement_root(cfg)
+    return {
+        "system_intake": [
+            intake / "candidates",
+            intake / "extracted",
+            intake / "needs-ocr",
+            intake / "needs-manual-review",
+            intake / "rejected",
+        ],
+        "system_evidence_refinements": [
+            fill,
+            fill / "官方文档",
+            fill / "研究论文",
+            fill / "行业报告",
+            fill / "案例材料",
+            fill / "临时事实核查",
+            fill / "待人工确认",
+        ],
+    }
+
+
+def init_evidence_intake(cfg: dict[str, Any], apply: bool = False) -> dict[str, Any]:
+    ensure_system_files(cfg)
+    expected = evidence_intake_expected_dirs(cfg)
+    created = []
+    existing = []
+    for group, paths in expected.items():
+        for path in paths:
+            if path.exists():
+                existing.append({"group": group, "path": str(path)})
+                continue
+            created.append({"group": group, "path": str(path)})
+            if apply:
+                path.mkdir(parents=True, exist_ok=True)
+    ledger = system_file(cfg, "evidence-fill-ledger.jsonl")
+    if apply and not ledger.exists():
+        ledger.write_text("", encoding="utf-8")
+    return {
+        "apply": apply,
+        "created_count": len(created),
+        "existing_count": len(existing),
+        "created": created,
+        "existing": existing,
+        "ledger": str(ledger),
+        "system_evidence_refinement_root": str(system_evidence_refinement_root(cfg)),
+    }
+
+
+def evidence_intake_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    expected = evidence_intake_expected_dirs(cfg)
+    missing = []
+    present = []
+    for group, paths in expected.items():
+        for path in paths:
+            item = {"group": group, "path": str(path)}
+            if path.exists() and path.is_dir():
+                present.append(item)
+            else:
+                missing.append(item)
+    ledger = system_file(cfg, "evidence-fill-ledger.jsonl")
+    ledger_ok = ledger.exists()
+    if not ledger_ok:
+        missing.append({"group": "active_ledger", "path": str(ledger)})
+    return {
+        "passed": not missing,
+        "missing_count": len(missing),
+        "present_count": len(present),
+        "ledger": str(ledger),
+        "ledger_exists": ledger_ok,
+        "system_evidence_refinement_root": str(system_evidence_refinement_root(cfg)),
+        "missing": missing,
+        "present": present,
+    }
+
+
+def render_evidence_intake_audit(result: dict[str, Any]) -> str:
+    lines = [
+        "# Evidence Intake Audit",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        f"status: {'passed' if result['passed'] else 'missing'}",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"- passed: {str(result['passed']).lower()}",
+        f"- missing_count: {result['missing_count']}",
+        f"- present_count: {result['present_count']}",
+        f"- ledger_exists: {str(result['ledger_exists']).lower()}",
+        f"- ledger: `{result['ledger']}`",
+        f"- system_evidence_refinement_root: `{result['system_evidence_refinement_root']}`",
+        "",
+        "## Missing",
+        "",
+    ]
+    if not result["missing"]:
+        lines.append("- None.")
+    for item in result["missing"]:
+        lines.append(f"- {item['group']}: `{item['path']}`")
+    lines += ["", "## Present", ""]
+    if not result["present"]:
+        lines.append("- None.")
+    for item in result["present"]:
+        lines.append(f"- {item['group']}: `{item['path']}`")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_source_capabilities(cfg: dict[str, Any], intake: dict[str, Any]) -> str:
+    lines = [
+        "# Source Capabilities",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        "status: active",
+        "---",
+        "",
+        "## Intake Boundary",
+        "",
+        "- Unreadable, garbled, unsupported, or permission-uncertain sources must not enter source refinements.",
+        "- System-found evidence must be isolated in evidence-intake first.",
+        "- Durable system-found evidence may enter the source-refinement layer only under the separate system evidence fill directory.",
+        "- Fact-check-only evidence stays in the ledger unless deliberately promoted.",
+        "",
+        "## Extraction Quality States",
+        "",
+        "- extract_ok",
+        "- extract_needs_cleanup",
+        "- ocr_required",
+        "- layout_complex",
+        "- mojibake_failed",
+        "- manual_review_required",
+        "- unsupported_source",
+        "",
+        "## Current Skeleton",
+        "",
+        f"- evidence_intake_audit_passed: {str(intake['passed']).lower()}",
+        f"- system_evidence_refinement_root: `{intake['system_evidence_refinement_root']}`",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def file_sha256(path: Path) -> str:
@@ -1292,6 +1464,225 @@ def collect_markdown_files(path: Path) -> list[Path]:
     return sorted([p for p in path.rglob("*.md") if p.is_file()], key=lambda p: str(p))
 
 
+def _infer_source_channel(meta: dict[str, Any], path: Path, text: str) -> str:
+    raw_type = str(meta.get("source_type") or "").lower()
+    source_file = str(meta.get("source_file") or "")
+    url = str(meta.get("url") or "").lower()
+    name = f"{path.name} {source_file}".lower()
+    if raw_type in {"ebook", "book"} or "电子书" in path.parts or any(x in source_file.lower() for x in [".epub", ".pdf"]):
+        return "book"
+    if "paper" in raw_type or "arxiv" in url or "doi.org" in url or "论文" in name:
+        return "paper"
+    if any(x in url for x in [".gov", "gov.cn", "stats.gov", "sec.gov"]) or ("非官方" not in name and any(x in name for x in ["官方", "标准", "白皮书"])):
+        return "official_doc"
+    if any(x in name for x in ["报告", "研究", "白皮书", "财报"]):
+        return "report"
+    if raw_type in {"public_account_article", "wechat", "public_account"} or "公众号" in path.parts:
+        return "public_account"
+    if any(x in name for x in ["教程", "指南", "插件", "安装", "配置", "手把手"]):
+        return "tool_doc"
+    if raw_type in {"web_article", "article", "web"}:
+        return "web_article"
+    return "unknown"
+
+
+def _infer_source_entity_type(meta: dict[str, Any], path: Path, text: str) -> str:
+    account = str(meta.get("account") or meta.get("author") or "").lower()
+    url = str(meta.get("url") or "").lower()
+    title_blob = f"{path.name} {account}".lower()
+    if any(x in url for x in [".gov", "gov.cn", "sec.gov"]):
+        return "official"
+    if any(x in title_blob for x in ["麦肯锡", "mckinsey", "贝恩", "bain", "bcg", "中金", "斯坦福", "微软", "华为", "红杉"]):
+        return "institution"
+    if any(x in title_blob for x in ["专访", "访谈", "人物"]):
+        return "expert"
+    if account:
+        return "practitioner"
+    return "unknown"
+
+
+def _infer_evidence_mode(channel: str, path: Path, text: str) -> str:
+    blob = f"{path.name}\n{text[:4000]}".lower()
+    if channel in {"official_doc", "paper"}:
+        return "primary_data"
+    if channel == "book":
+        return "theory"
+    if any(x in blob for x in ["数据显示", "研究报告", "财报", "白皮书", "according to", "report"]):
+        return "cited_report"
+    if any(x in blob for x in ["案例", "复盘", "实战", "我用", "我们做", "亲历"]):
+        return "firsthand_case"
+    if any(x in blob for x in ["教程", "安装", "配置", "步骤", "手把手", "how to"]):
+        return "tutorial"
+    if any(x in blob for x in ["杀疯", "炸了", "暴利", "月入", "必看", "保姆级", "颠覆"]):
+        return "marketing"
+    if any(x in blob for x in ["观点", "认为", "判断", "启发"]):
+        return "opinion"
+    return "summary"
+
+
+def _source_time_sensitivity(channel: str, evidence_mode: str, text: str) -> str:
+    if has_high_risk(text) or channel in {"tool_doc", "report", "official_doc"} or evidence_mode in {"primary_data", "cited_report", "tutorial", "marketing"}:
+        return "high"
+    if channel in {"public_account", "web_article"}:
+        return "medium"
+    return "low"
+
+
+def _source_freshness_score(meta: dict[str, Any], channel: str, sensitivity: str) -> int:
+    saved = _parse_date(meta.get("saved_at")) or _parse_date(meta.get("published_at")) or _parse_date(meta.get("created_at"))
+    if not saved:
+        return 3 if sensitivity != "high" else 2
+    age_days = (date.today() - saved).days
+    if sensitivity == "low":
+        return 5 if age_days <= 3650 else 4
+    if sensitivity == "medium":
+        if age_days <= 180:
+            return 5
+        if age_days <= 730:
+            return 4
+        return 2
+    if age_days <= 90:
+        return 5
+    if age_days <= 365:
+        return 3
+    return 1
+
+
+def classify_source_quality(meta: dict[str, Any], path: Path, text: str) -> dict[str, Any]:
+    channel = _infer_source_channel(meta, path, text)
+    entity = _infer_source_entity_type(meta, path, text)
+    mode = _infer_evidence_mode(channel, path, text)
+    sensitivity = _source_time_sensitivity(channel, mode, text)
+    authority = 2
+    if channel in {"paper", "official_doc", "book"}:
+        authority = 5
+    elif channel == "report" or entity == "institution":
+        authority = 4
+    elif entity in {"expert", "practitioner"}:
+        authority = 3
+    evidence_strength = 2
+    if mode in {"primary_data", "theory"}:
+        evidence_strength = 5
+    elif mode in {"cited_report", "firsthand_case"}:
+        evidence_strength = 4
+    elif mode == "tutorial":
+        evidence_strength = 3
+    elif mode == "marketing":
+        evidence_strength = 1
+    freshness = _source_freshness_score(meta, channel, sensitivity)
+    bias_risk = "low"
+    if mode == "marketing":
+        bias_risk = "high"
+    elif channel in {"public_account", "web_article"} or mode in {"opinion", "summary"}:
+        bias_risk = "medium"
+    score = authority + evidence_strength + freshness
+    if bias_risk == "high":
+        score -= 3
+    elif bias_risk == "medium":
+        score -= 1
+    if has_high_risk(text) and mode not in {"primary_data", "cited_report"}:
+        score -= 1
+    if score >= 13:
+        tier = "A"
+        weight = 1.3
+    elif score >= 10:
+        tier = "B"
+        weight = 1.0
+    elif score >= 7:
+        tier = "C"
+        weight = 0.6
+    else:
+        tier = "D"
+        weight = 0.25
+    flags = []
+    if bias_risk == "high":
+        flags.append("marketing_or_title_bait")
+    if sensitivity == "high" and freshness <= 2:
+        flags.append("stale_high_sensitivity")
+    if has_high_risk(text) and mode not in {"primary_data", "cited_report"}:
+        flags.append("high_fact_risk_without_primary_evidence")
+    if channel == "public_account" and tier in {"C", "D"}:
+        flags.append("use_as_scene_or_lead_not_core_evidence")
+    return {
+        "source_channel": channel,
+        "source_entity_type": entity,
+        "source_evidence_mode": mode,
+        "source_time_sensitivity": sensitivity,
+        "source_quality_tier": tier,
+        "source_authority": authority,
+        "source_freshness": freshness,
+        "source_evidence_strength": evidence_strength,
+        "source_bias_risk": bias_risk,
+        "promotion_weight": weight,
+        "score": score,
+        "flags": flags,
+    }
+
+
+def source_quality_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    root = kb_path(cfg, "source_refinements")
+    items = []
+    tier_counts: Counter[str] = Counter()
+    channel_counts: Counter[str] = Counter()
+    flag_counts: Counter[str] = Counter()
+    for p in collect_markdown_files(root):
+        text = p.read_text("utf-8", errors="replace")
+        meta, _body = split_frontmatter(text)
+        result = classify_source_quality(meta, p, text)
+        rel = str(p.relative_to(base))
+        tier_counts[result["source_quality_tier"]] += 1
+        channel_counts[result["source_channel"]] += 1
+        for flag in result["flags"]:
+            flag_counts[flag] += 1
+        items.append({"file": rel, **result})
+    items.sort(key=lambda x: (x["source_quality_tier"], x["promotion_weight"], x["file"]))
+    return {
+        "source_count": len(items),
+        "tier_counts": dict(tier_counts),
+        "channel_counts": dict(channel_counts),
+        "flag_counts": dict(flag_counts),
+        "items": items,
+    }
+
+
+def render_source_quality_audit(result: dict[str, Any]) -> str:
+    lines = [
+        "# Source Quality Audit",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        "status: active",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"- source_count: {result['source_count']}",
+        "",
+        "## Tier Counts",
+        "",
+    ]
+    for key in ["A", "B", "C", "D"]:
+        lines.append(f"- {key}: {result['tier_counts'].get(key, 0)}")
+    lines += ["", "## Channel Counts", ""]
+    for key, value in sorted(result["channel_counts"].items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"- {key}: {value}")
+    lines += ["", "## Flags", ""]
+    if not result["flag_counts"]:
+        lines.append("- None.")
+    for key, value in sorted(result["flag_counts"].items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"- {key}: {value}")
+    lines += ["", "## Low-Tier / High-Risk Sources", ""]
+    risky = [item for item in result["items"] if item["source_quality_tier"] in {"C", "D"} or item["flags"]]
+    if not risky:
+        lines.append("- None.")
+    for item in risky[:300]:
+        flags = ",".join(item["flags"]) if item["flags"] else "-"
+        lines.append(f"- `{item['file']}` tier={item['source_quality_tier']} channel={item['source_channel']} mode={item['source_evidence_mode']} freshness={item['source_freshness']} weight={item['promotion_weight']} flags={flags}")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def risk_signals(text: str) -> list[str]:
     signals = [name for name, pattern in HIGH_RISK_PATTERNS.items() if re.search(pattern, text, flags=re.I)]
     if "fact_check_required: true" in text.lower():
@@ -1572,6 +1963,197 @@ def render_output_quality(results: list[dict[str, Any]]) -> str:
         for key, ok in r["checks"].items():
             lines.append(f"- {key}: {'pass' if ok else 'fail'}")
         lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+EDITORIAL_DIMENSIONS = [
+    "insight_density",
+    "problem_sharpness",
+    "argument_strength",
+    "originality",
+    "actionability",
+    "expression_quality",
+]
+
+
+def _score_1_5(points: int, total: int) -> int:
+    if total <= 0:
+        return 1
+    ratio = max(0, min(points / total, 1))
+    return max(1, min(5, int(round(1 + ratio * 4))))
+
+
+def _body_for_editorial(text: str, body: str) -> str:
+    return _section_text(body, "正文草稿") or body or text
+
+
+def _argument_gate(text: str, body: str) -> dict[str, bool]:
+    draft = _body_for_editorial(text, body)
+    editorial_card = _section_text(body, "发布编辑卡片")
+    thesis_section = _section_text(body, "核心观点") or _section_text(body, "核心论断")
+    thesis_present = bool(thesis_section.strip()) or _has_subheading(editorial_card, "核心论断") or bool(re.search(r"核心(观点|论断|判断)", text))
+    section_count = len(re.findall(r"(?m)^###\s+", draft))
+    return {
+        "core_thesis_explicit": thesis_present,
+        "three_supporting_moves": section_count >= 3 or len(re.findall(r"(?m)^第[一二三四五六七八九十]+", draft)) >= 3,
+        "evidence_or_examples_present": bool(re.search(r"案例|例子|比如|例如|证据|来源|数据|报告|研究|客户|团队", draft)),
+        "counterpoint_or_boundary_present": bool(re.search(r"但是|反过来|误区|不是.*而是|边界|限制|不适用|风险|反例|取舍|tradeoff", draft, flags=re.I)),
+        "reader_judgment_change_clear": bool(re.search(r"读者|你会|你可以|从.*到|不再|真正|判断|决策|行动", draft)),
+        "fact_boundary_present": "fact_check_required" in text or "核查" in text or "事实边界" in text or "边界" in draft,
+    }
+
+
+def editorial_quality_for_output(base: Path, p: Path) -> dict[str, Any]:
+    text = p.read_text(encoding="utf-8", errors="ignore")
+    body = re.sub(r"---.*?---", "", text, flags=re.S).strip()
+    draft = _body_for_editorial(text, body)
+    rel = str(p.relative_to(base))
+    mechanical = evaluate_output_file(base, p)
+    argument_gate = _argument_gate(text, body)
+    zh_chars = _zh_char_count(draft)
+    h3_count = len(re.findall(r"(?m)^###\s+", draft))
+    bullet_count = len(re.findall(r"(?m)^[-*]\s+", draft))
+    para_count = len([para for para in re.split(r"\n\s*\n", draft) if _zh_char_count(para) > 20])
+    has_generic = bool(re.search(r"总之|综上所述|在当今|随着.*发展|具有重要意义|值得注意的是|我们需要认识到", draft))
+    insight_points = sum([
+        bool(re.search(r"真正|本质|根因|误区|反常识|不是.*而是|关键不在|核心不是", draft)),
+        bool(re.search(r"边界|代价|取舍|限制|不适用|风险", draft)),
+        bool(re.search(r"判断|决策|机制|闭环|系统|杠杆", draft)),
+        mechanical.get("article_maturity") in {"article_draft", "publishable_draft"} or zh_chars >= 1200,
+        not has_generic,
+    ])
+    problem_points = sum([
+        bool(re.search(r"问题|痛点|困惑|为什么|失败|卡住|犹豫|风险", text)),
+        bool(re.search(r"读者|目标读者|用户|创业者|负责人|团队|学生|管理者", text)),
+        bool(re.search(r"场景|现场|当.*时|如果|准备|写作|汇报|决策", text)),
+        bool(re.search(r"冲突|矛盾|反常识|不是.*而是|明明.*却", draft)),
+    ])
+    argument_points = sum([
+        argument_gate["core_thesis_explicit"],
+        argument_gate["three_supporting_moves"],
+        argument_gate["evidence_or_examples_present"],
+        argument_gate["counterpoint_or_boundary_present"],
+        argument_gate["fact_boundary_present"],
+    ])
+    originality_points = sum([
+        bool(re.search(r"不是.*而是|反常识|误区|真正|被忽略|最大误区|关键不在", draft)),
+        bool(re.search(r"对比|从.*到|区别|差异|边界|重新理解", draft)),
+        bool(re.search(r"模型|框架|机制|闭环|地图|路径", draft)),
+        not has_generic,
+    ])
+    action_points = sum([
+        bool(re.search(r"步骤|清单|方法|怎么做|建议|下一步|可以这样|操作|流程", draft)),
+        bullet_count >= 5,
+        bool(re.search(r"判断标准|检查|原则|规则|模板|工作流|SOP", draft)),
+        bool(re.search(r"结尾|最后|所以|行动|开始|避免", draft[-1000:])),
+    ])
+    expression_points = sum([
+        bool(re.search(r"标题候选|可复用金句|金句", text)),
+        para_count >= 8,
+        h3_count >= 3,
+        bool(re.search(r"开头|钩子|场景|故事|很多人|你有没有", draft[:1200])),
+        bool(re.search(r"不是.*而是|真正|不要|只有|越.*越", draft)),
+    ])
+    scores = {
+        "insight_density": _score_1_5(insight_points, 5),
+        "problem_sharpness": _score_1_5(problem_points, 4),
+        "argument_strength": _score_1_5(argument_points, 5),
+        "originality": _score_1_5(originality_points, 4),
+        "actionability": _score_1_5(action_points, 4),
+        "expression_quality": _score_1_5(expression_points, 5),
+    }
+    average = round(sum(scores.values()) / len(scores), 2)
+    weak_dimensions = [key for key, value in scores.items() if value <= 3]
+    article_maturity = str(mechanical.get("article_maturity") or "")
+    argument_gate_passed = all(argument_gate.values())
+    is_article = bool(article_maturity)
+    if average >= 4.2 and not any(value < 4 for value in scores.values()):
+        status = "publishable" if is_article else "strong"
+    elif article_maturity == "publishable_draft" and not argument_gate_passed:
+        status = "downgrade_to_draft"
+    elif average >= 3.0:
+        status = "revise"
+    elif not argument_gate["core_thesis_explicit"] and not argument_gate["reader_judgment_change_clear"]:
+        status = "park"
+    else:
+        status = "downgrade_to_draft"
+    repair = []
+    mapping = {
+        "insight_density": "return_to_topic_page_and_rewrite_current_judgment",
+        "problem_sharpness": "rewrite_editorial_card_reader_problem_and_tension",
+        "argument_strength": "repair_argument_draft_with_evidence_counterpoint_and_limits",
+        "originality": "add_differentiated_angle_contrast_or_tradeoff",
+        "actionability": "add_steps_checklist_decision_criteria_or_next_actions",
+        "expression_quality": "rewrite_hook_rhythm_memorable_lines_and_ending",
+    }
+    for key in weak_dimensions:
+        repair.append(mapping[key])
+    if article_maturity in {"article_draft", "publishable_draft"} and not argument_gate_passed:
+        repair.append("do_not_polish_longer_until_argument_gate_passes")
+    return {
+        "file": rel,
+        "status": status,
+        "average_score": average,
+        "scores": scores,
+        "weak_dimensions": weak_dimensions,
+        "repair_actions": sorted(set(repair)),
+        "article_maturity": article_maturity or None,
+        "argument_gate_passed": argument_gate_passed,
+        "argument_gate": argument_gate,
+    }
+
+
+def editorial_quality_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    items = [editorial_quality_for_output(base, p) for p in collect_markdown_files(kb_path(cfg, "outputs"))]
+    status_counts = Counter(item["status"] for item in items)
+    weak_counts: Counter[str] = Counter()
+    for item in items:
+        for dim in item["weak_dimensions"]:
+            weak_counts[dim] += 1
+    return {
+        "output_count": len(items),
+        "status_counts": dict(status_counts),
+        "weak_dimension_counts": dict(weak_counts),
+        "needs_attention_count": sum(1 for item in items if item["status"] not in {"publishable", "strong"}),
+        "items": sorted(items, key=lambda item: (item["status"] == "publishable", item["average_score"], item["file"])),
+    }
+
+
+def render_editorial_quality(result: dict[str, Any]) -> str:
+    lines = [
+        "# Editorial Quality Review",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        "status: active",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"- output_count: {result['output_count']}",
+        f"- needs_attention_count: {result['needs_attention_count']}",
+        f"- status_counts: {result['status_counts']}",
+        f"- weak_dimension_counts: {result['weak_dimension_counts']}",
+        "",
+        "## Items",
+        "",
+    ]
+    if not result["items"]:
+        lines.append("- None.")
+    for item in result["items"]:
+        lines += [
+            f"### {item['status']} · `{item['file']}`",
+            "",
+            f"- average_score: {item['average_score']}",
+            f"- article_maturity: {item['article_maturity'] or '-'}",
+            f"- argument_gate_passed: {str(item['argument_gate_passed']).lower()}",
+            f"- scores: {item['scores']}",
+            f"- weak_dimensions: {', '.join(item['weak_dimensions']) if item['weak_dimensions'] else '-'}",
+            f"- repair_actions: {', '.join(item['repair_actions']) if item['repair_actions'] else '-'}",
+            "",
+        ]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -1888,7 +2470,7 @@ def _update_wikilinks(text: str, title_map: dict[str, str]) -> str:
     return re.sub(r"\[\[([^\]]+)\]\]", repl, text)
 
 
-def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_updated_at: bool = False) -> dict[str, Any]:
+def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_updated_at: bool = False, update_link_refresh_dates: bool = True) -> dict[str, Any]:
     base = Path(cfg["ai_knowledge_base"])
     files = []
     file_root_keys: dict[Path, str] = {}
@@ -1975,7 +2557,9 @@ def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_upd
         src.rename(dst)
     # Refresh wikilinks in formal knowledge roots and system reports. Do not mutate backups.
     refreshed_files = []
+    link_refresh_metadata_updated = []
     refresh_roots = [kb_path(cfg, key) for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs")]
+    formal_roots = {kb_path(cfg, key).resolve(): key for key in ("source_refinements", "topic_pages", "reusable_assets", "outputs")}
     reports_root = system_file(cfg, "quality-gate.md").parent
     if reports_root.exists():
         refresh_roots.append(reports_root)
@@ -1988,9 +2572,29 @@ def normalize_filename_dates(cfg: dict[str, Any], apply: bool = False, touch_upd
             raw = p.read_text("utf-8", errors="ignore")
             new = _update_wikilinks(raw, title_map)
             if new != raw:
+                if update_link_refresh_dates:
+                    try:
+                        p_resolved = p.resolve()
+                        in_formal_root = any(root == p_resolved or root in p_resolved.parents for root in formal_roots)
+                    except OSError:
+                        in_formal_root = False
+                    today = date.today().isoformat()
+                    if in_formal_root:
+                        refreshed, changed = _set_frontmatter_field(new, "obsidian_links_updated", today, after_keys=["moc", "related_outputs", "related_assets", "related_topics", "related_sources"])
+                        if changed:
+                            new = refreshed
+                            link_refresh_metadata_updated.append(str(p.relative_to(base)))
                 p.write_text(new, encoding="utf-8")
                 refreshed_files.append(str(p.relative_to(base)))
-    return {"apply": True, "renamed": planned, "rename_count": len(planned), "wikilink_files_updated": refreshed_files}
+    return {
+        "apply": True,
+        "renamed": planned,
+        "rename_count": len(planned),
+        "wikilink_files_updated": refreshed_files,
+        "link_refresh_metadata_updated": link_refresh_metadata_updated,
+        "date_touched_by_link_refresh": [],
+        "followup": None,
+    }
 
 
 def relation_audit(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -2221,6 +2825,27 @@ def parse_wikilinks_from_value(value: Any) -> list[str]:
     return wikilink_targets(text)
 
 
+def parse_evidence_refs(value: Any) -> list[str]:
+    """Parse evidence references from frontmatter.
+
+    Evidence fields may contain Obsidian wikilinks, plain titles, relative paths,
+    or a mix of both. Treat plain values as candidate titles so audits do not
+    confuse "not wikilinked" with "not evidenced".
+    """
+    refs = set(parse_wikilinks_from_value(value))
+    values = value if isinstance(value, list) else [value]
+    for item in values:
+        text = str(item or "").strip().strip('"').strip("'")
+        if not text:
+            continue
+        if "[[" in text:
+            refs.update(wikilink_targets(text))
+            continue
+        refs.add(clean_link_target(text))
+        refs.add(Path(clean_link_target(text)).stem)
+    return sorted(r for r in refs if r)
+
+
 def asset_audit(cfg: dict[str, Any]) -> dict[str, Any]:
     base = Path(cfg["ai_knowledge_base"])
     asset_root = kb_path(cfg, "reusable_assets")
@@ -2321,6 +2946,494 @@ def render_asset_audit(result: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _source_quality_by_title(cfg: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    base = Path(cfg["ai_knowledge_base"])
+    root = kb_path(cfg, "source_refinements")
+    for p in collect_markdown_files(root):
+        text = p.read_text("utf-8", errors="replace")
+        meta, _body = split_frontmatter(text)
+        quality = classify_source_quality(meta, p, text)
+        rel = str(p.relative_to(base))
+        title = p.stem
+        md_title = markdown_title(p, text)
+        record = {"file": rel, **quality}
+        for key in {title, md_title, strip_date_prefix(title, meta, root_key="source_refinements"), strip_date_prefix(md_title, meta, root_key="source_refinements")}:
+            if key:
+                index[key] = record
+    return index
+
+
+def _evidence_minimum_for_gap(root_key: str, meta: dict[str, Any], path: Path) -> int:
+    if root_key == "topic_pages":
+        if "MOC" in path.parts or "moc" in {part.lower() for part in path.parts}:
+            return 0
+        return 3
+    if root_key == "reusable_assets":
+        asset_type = str(meta.get("asset_type") or "").strip().lower()
+        if asset_type in {"case", "case-pattern", "anti-case", "expression", "definition", "distinction", "warning", "metaphor"}:
+            return 1
+        return 3
+    output_type = str(meta.get("output_type") or "").strip().lower()
+    maturity = str(meta.get("article_maturity") or "").strip().lower()
+    if maturity == "publishable_draft":
+        return 3
+    if output_type in {"feynman", "费曼解释"}:
+        return 2
+    return 3
+
+
+def _gap_priority(root_key: str, gap_types: list[str], meta: dict[str, Any]) -> str:
+    maturity = str(meta.get("article_maturity") or "").lower()
+    if "publishable_output_needs_fact_support" in gap_types or maturity == "publishable_draft":
+        return "P0"
+    if "high_fact_risk_without_primary_evidence" in gap_types:
+        return "P1"
+    if root_key == "topic_pages" or "missing_authoritative_source" in gap_types:
+        return "P2"
+    return "P3"
+
+
+def _preferred_source_types(gap_types: list[str]) -> list[str]:
+    if "high_fact_risk_without_primary_evidence" in gap_types or "publishable_output_needs_fact_support" in gap_types:
+        return ["official_doc", "report", "paper", "primary_source"]
+    if "missing_authoritative_source" in gap_types:
+        return ["book", "paper", "official_doc", "institutional_report"]
+    if "single_channel_evidence" in gap_types:
+        return ["book", "report", "paper", "official_doc", "case"]
+    return ["book", "report", "paper", "official_doc", "high_quality_case"]
+
+
+def evidence_gap_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    quality_index = _source_quality_by_title(cfg)
+    verification_results = latest_verification_results(cfg)
+    gaps = []
+    type_counts: Counter[str] = Counter()
+    priority_counts: Counter[str] = Counter()
+    for root_key, p in formal_artifact_files(cfg):
+        text = p.read_text("utf-8", errors="replace")
+        meta, _body = split_frontmatter(text)
+        evidence_refs = parse_evidence_refs(meta.get("evidence_from", meta.get("supported_by", [])))
+        source_records = []
+        for ref in evidence_refs:
+            clean = clean_link_target(ref)
+            rec = quality_index.get(clean)
+            if rec:
+                source_records.append(rec)
+        tiers = [r["source_quality_tier"] for r in source_records]
+        channels = [r["source_channel"] for r in source_records]
+        modes = [r["source_evidence_mode"] for r in source_records]
+        weights = [float(r["promotion_weight"]) for r in source_records]
+        gap_types: list[str] = []
+        reasons: list[str] = []
+        minimum = _evidence_minimum_for_gap(root_key, meta, p)
+        if len(source_records) < minimum:
+            gap_types.append("thin_evidence")
+            reasons.append(f"resolved evidence count {len(source_records)} is below minimum {minimum}")
+        if source_records and not any(t in {"A", "B"} for t in tiers):
+            gap_types.append("only_low_tier_sources")
+            reasons.append("current supporting sources are all C/D tier")
+        if source_records and not any(t in {"A", "B"} for t in tiers):
+            gap_types.append("missing_authoritative_source")
+        if len(set(channels)) == 1 and channels and channels[0] == "public_account" and root_key in {"topic_pages", "outputs"}:
+            gap_types.append("single_channel_evidence")
+            reasons.append("evidence is concentrated in public-account sources")
+        if has_high_risk(text) and not any(m in {"primary_data", "cited_report"} or ch in {"official_doc", "paper", "report"} for m, ch in zip(modes, channels)):
+            gap_types.append("high_fact_risk_without_primary_evidence")
+            reasons.append("artifact has high-risk factual signals without primary/report evidence")
+        rel = str(p.relative_to(base))
+        verification_id = hashlib.sha256(rel.encode("utf-8")).hexdigest()[:16]
+        verification_status = str(verification_results.get(verification_id, {}).get("status") or "")
+        publication_fact_support_closed = verification_status in {"verified", "not_applicable"}
+        maturity = str(meta.get("article_maturity") or "").lower()
+        if root_key == "outputs" and maturity == "publishable_draft" and has_high_risk(text) and not publication_fact_support_closed:
+            gap_types.append("publishable_output_needs_fact_support")
+            reasons.append("publishable draft still needs publication-grade fact support")
+        if source_records and sum(weights) < minimum * 0.8:
+            gap_types.append("low_weighted_evidence")
+            reasons.append(f"weighted evidence {sum(weights):.2f} is weak for artifact type")
+        gap_types = sorted(set(gap_types))
+        if not gap_types:
+            continue
+        for t in gap_types:
+            type_counts[t] += 1
+        priority = _gap_priority(root_key, gap_types, meta)
+        priority_counts[priority] += 1
+        gap_id = hashlib.sha256((rel + "|" + ",".join(gap_types)).encode("utf-8")).hexdigest()[:12]
+        if "thin_evidence" in gap_types or "missing_authoritative_source" in gap_types:
+            action = "bounded_evidence_fill"
+        elif "publishable_output_needs_fact_support" in gap_types:
+            action = "verify_before_publish"
+        elif "only_low_tier_sources" in gap_types:
+            action = "limit_use_or_demote_to_needs_evidence"
+        else:
+            action = "review_evidence_boundary"
+        gaps.append({
+            "gap_id": gap_id,
+            "priority": priority,
+            "target_artifact": rel,
+            "layer": root_key,
+            "gap_type": gap_types,
+            "why_needed": "; ".join(reasons) if reasons else "evidence boundary needs review",
+            "current_evidence_count": len(source_records),
+            "current_best_tier": min(tiers) if tiers else "none",
+            "current_source_channels": sorted(set(channels)),
+            "weighted_evidence": round(sum(weights), 2),
+            "preferred_source_type": _preferred_source_types(gap_types),
+            "max_sources_to_add": 3,
+            "max_search_queries": 5,
+            "max_reading_items": 3,
+            "stop_condition": "stop when 2 A/B sources are found, budget is exhausted, or downgrade/park is recommended",
+            "recommended_action": action,
+            "status": "open",
+        })
+    order = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    gaps.sort(key=lambda x: (order.get(x["priority"], 9), x["target_artifact"]))
+    return {
+        "gap_count": len(gaps),
+        "priority_counts": dict(priority_counts),
+        "gap_type_counts": dict(type_counts),
+        "gaps": gaps,
+    }
+
+
+def render_evidence_gap_registry(result: dict[str, Any]) -> str:
+    lines = [
+        "# Evidence Gap Registry",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        f"status: {'open' if result['gap_count'] else 'clear'}",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"- gap_count: {result['gap_count']}",
+        "",
+        "## Priority Counts",
+        "",
+    ]
+    for key in ["P0", "P1", "P2", "P3"]:
+        lines.append(f"- {key}: {result['priority_counts'].get(key, 0)}")
+    lines += ["", "## Gap Type Counts", ""]
+    if not result["gap_type_counts"]:
+        lines.append("- None.")
+    for key, value in sorted(result["gap_type_counts"].items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"- {key}: {value}")
+    lines += ["", "## Open Gaps", ""]
+    if not result["gaps"]:
+        lines.append("- None.")
+    for item in result["gaps"][:300]:
+        lines += [
+            f"### {item['priority']} · `{item['gap_id']}`",
+            "",
+            f"- target: `{item['target_artifact']}`",
+            f"- gap_type: {', '.join(item['gap_type'])}",
+            f"- why_needed: {item['why_needed']}",
+            f"- evidence: count={item['current_evidence_count']}, best_tier={item['current_best_tier']}, weighted={item['weighted_evidence']}, channels={', '.join(item['current_source_channels']) if item['current_source_channels'] else 'none'}",
+            f"- preferred_source_type: {', '.join(item['preferred_source_type'])}",
+            f"- budget: sources={item['max_sources_to_add']}, queries={item['max_search_queries']}, readings={item['max_reading_items']}",
+            f"- stop_condition: {item['stop_condition']}",
+            f"- recommended_action: {item['recommended_action']}",
+            f"- status: {item['status']}",
+            "",
+        ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def formal_artifact_files(cfg: dict[str, Any]) -> list[tuple[str, Path]]:
+    items: list[tuple[str, Path]] = []
+    for root_key in ("topic_pages", "reusable_assets", "outputs"):
+        root = kb_path(cfg, root_key)
+        for p in collect_markdown_files(root):
+            items.append((root_key, p))
+    return items
+
+
+def _parse_date(value: Any) -> date | None:
+    text = str(value or "").strip().strip('"').strip("'")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}", text):
+        return None
+    try:
+        return datetime.strptime(text[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _artifact_review_interval_days(root_key: str, path: Path, meta: dict[str, Any], text: str) -> int:
+    output_type = str(meta.get("output_type") or "").lower()
+    article_maturity = str(meta.get("article_maturity") or "").lower()
+    asset_type = str(meta.get("asset_type") or "").lower()
+    parts = {part.lower() for part in path.parts}
+    if has_high_risk(text):
+        return 14
+    if root_key == "topic_pages":
+        if "moc" in parts or "moc" in str(path).lower():
+            return 90
+        return 60
+    if root_key == "reusable_assets":
+        if asset_type in {"expression", "expressions", "金句表达", "definition", "metaphor"}:
+            return 180
+        return 90
+    if root_key == "outputs":
+        if article_maturity == "publishable_draft":
+            return 14
+        if article_maturity == "article_draft" or "文章草稿" in output_type:
+            return 30
+        if "方案" in output_type or "solution" in output_type:
+            return 60
+        return 90
+    return 90
+
+
+def lifecycle_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    items = []
+    counts: Counter[str] = Counter()
+    for root_key, p in formal_artifact_files(cfg):
+        text = p.read_text("utf-8", errors="replace")
+        meta, _body = split_frontmatter(text)
+        status = str(meta.get("lifecycle_status") or meta.get("status") or "").strip().strip('"')
+        issues: list[str] = []
+        actions: list[str] = []
+        if not str(meta.get("lifecycle_status") or "").strip():
+            issues.append("missing_lifecycle_status")
+            actions.append("add_lifecycle_status")
+        elif status not in LIFECYCLE_STATUSES:
+            issues.append("invalid_lifecycle_status")
+            actions.append("normalize_lifecycle_status")
+        evidence = meta.get("evidence_from", meta.get("supported_by", []))
+        if not isinstance(evidence, list) or len(evidence) == 0:
+            issues.append("missing_evidence_from")
+            actions.append("demote_to_needs_evidence")
+        output_status = str(meta.get("article_maturity") or meta.get("publish_status") or "").lower()
+        if root_key == "outputs" and ("needs_revision" in output_status or "rejected" in output_status):
+            issues.append("output_not_reusable")
+            actions.append("demote_to_needs_revision")
+        if issues:
+            for issue in issues:
+                counts[issue] += 1
+            items.append({
+                "file": str(p.relative_to(base)),
+                "layer": root_key,
+                "lifecycle_status": status,
+                "issues": issues,
+                "recommended_actions": sorted(set(actions)),
+            })
+    return {
+        "artifact_count": len(formal_artifact_files(cfg)),
+        "issue_count": len(items),
+        "issue_type_counts": dict(counts),
+        "items": items,
+    }
+
+
+def render_lifecycle_audit(result: dict[str, Any]) -> str:
+    lines = [
+        "# Lifecycle Audit",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        f"status: {'needs_action' if result['issue_count'] else 'clear'}",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"- artifact_count: {result['artifact_count']}",
+        f"- issue_count: {result['issue_count']}",
+    ]
+    for key, value in sorted(result["issue_type_counts"].items()):
+        lines.append(f"- {key}: {value}")
+    lines += ["", "## Items", ""]
+    if not result["items"]:
+        lines.append("- None.")
+    for item in result["items"][:500]:
+        lines.append(f"- `{item['file']}`: {', '.join(item['issues'])}; action={', '.join(item['recommended_actions'])}")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def knowledge_health_audit(cfg: dict[str, Any]) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    today = date.today()
+    items = []
+    counts: Counter[str] = Counter()
+    for root_key, p in formal_artifact_files(cfg):
+        text = p.read_text("utf-8", errors="replace")
+        meta, _body = split_frontmatter(text)
+        health = str(meta.get("health_status") or "").strip().strip('"')
+        reviewed = _parse_date(meta.get("last_health_reviewed_at")) or _parse_date(meta.get("updated_at")) or _parse_date(meta.get("created_at"))
+        interval = _artifact_review_interval_days(root_key, p, meta, text)
+        issues: list[str] = []
+        actions: list[str] = []
+        if not health:
+            issues.append("missing_health_status")
+            actions.append("add_health_status_review_due")
+        elif health not in HEALTH_STATUSES:
+            issues.append("invalid_health_status")
+            actions.append("normalize_health_status")
+        elif health != "healthy":
+            issues.append(health)
+            actions.append("perform_health_review")
+        if not _parse_date(meta.get("updated_at")):
+            issues.append("missing_updated_at")
+            actions.append("repair_updated_at")
+        if reviewed is None:
+            issues.append("missing_review_date")
+            actions.append("perform_health_review")
+        else:
+            age = (today - reviewed).days
+            if age > interval:
+                issues.append("review_due")
+                actions.append("perform_health_review")
+        if has_high_risk(text) and (reviewed is None or (today - reviewed).days > 14):
+            issues.append("stale_fact_risk")
+            actions.append("verify_or_demote_to_needs_evidence")
+        evidence = meta.get("evidence_from", meta.get("supported_by", []))
+        if not isinstance(evidence, list) or len(evidence) == 0:
+            issues.append("weak_evidence")
+            actions.append("mark_needs_evidence")
+        if issues:
+            for issue in issues:
+                counts[issue] += 1
+            items.append({
+                "file": str(p.relative_to(base)),
+                "layer": root_key,
+                "health_status": health,
+                "review_interval_days": interval,
+                "issues": sorted(set(issues)),
+                "recommended_actions": sorted(set(actions)),
+            })
+    return {
+        "artifact_count": len(formal_artifact_files(cfg)),
+        "issue_count": len(items),
+        "issue_type_counts": dict(counts),
+        "items": items,
+    }
+
+
+def render_knowledge_health(result: dict[str, Any]) -> str:
+    lines = [
+        "# Knowledge Health Audit",
+        "",
+        "---",
+        f"updated_at: {date.today().isoformat()}",
+        "stage: system",
+        f"status: {'needs_action' if result['issue_count'] else 'healthy'}",
+        "---",
+        "",
+        "## Summary",
+        "",
+        f"- artifact_count: {result['artifact_count']}",
+        f"- issue_count: {result['issue_count']}",
+    ]
+    for key, value in sorted(result["issue_type_counts"].items()):
+        lines.append(f"- {key}: {value}")
+    lines += ["", "## Items", ""]
+    if not result["items"]:
+        lines.append("- None.")
+    for item in result["items"][:500]:
+        lines.append(f"- `{item['file']}`: {', '.join(item['issues'])}; action={', '.join(item['recommended_actions'])}")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _frontmatter_value_line(key: str, value: str) -> str:
+    return f'{key}: "{value}"'
+
+
+def _set_frontmatter_field(text: str, key: str, value: str, after_keys: list[str] | None = None) -> tuple[str, bool]:
+    if not text.startswith("---\n"):
+        return text, False
+    end = text.find("\n---", 4)
+    if end == -1:
+        return text, False
+    fm_raw = text[4:end].strip("\n")
+    body = text[end + len("\n---"):]
+    lines = fm_raw.splitlines()
+    new_line = _frontmatter_value_line(key, value)
+    for i, line in enumerate(lines):
+        if re.match(rf"^{re.escape(key)}:\s*", line):
+            if line == new_line:
+                return text, False
+            lines[i] = new_line
+            return "---\n" + "\n".join(lines).rstrip() + "\n---" + body, True
+    insert_at = len(lines)
+    for candidate in after_keys or []:
+        for i, line in enumerate(lines):
+            if re.match(rf"^{re.escape(candidate)}:\s*", line):
+                insert_at = i + 1
+    lines.insert(insert_at, new_line)
+    return "---\n" + "\n".join(lines).rstrip() + "\n---" + body, True
+
+
+def _initial_lifecycle_status(root_key: str, path: Path, meta: dict[str, Any]) -> str:
+    current = str(meta.get("status") or "").strip().strip('"')
+    if current in LIFECYCLE_STATUSES:
+        return current
+    maturity = str(meta.get("article_maturity") or "").strip().strip('"')
+    output_type = str(meta.get("output_type") or "").strip()
+    if root_key == "outputs":
+        if maturity == "publishable_draft":
+            return "active"
+        if maturity == "article_draft" or "文章草稿" in output_type:
+            return "draft"
+        if "复盘" in output_type or "review" in output_type.lower():
+            return "active"
+        return "draft"
+    if root_key == "topic_pages":
+        return "active"
+    if root_key == "reusable_assets":
+        return "active"
+    return "draft"
+
+
+def initialize_lifecycle_health(cfg: dict[str, Any], apply: bool = False) -> dict[str, Any]:
+    base = Path(cfg["ai_knowledge_base"])
+    today = date.today().isoformat()
+    planned = []
+    changed_count = 0
+    for root_key, p in formal_artifact_files(cfg):
+        raw = p.read_text("utf-8", errors="replace")
+        meta, _body = split_frontmatter(raw)
+        if not meta:
+            continue
+        lifecycle = str(meta.get("lifecycle_status") or "").strip().strip('"') or _initial_lifecycle_status(root_key, p, meta)
+        if lifecycle not in LIFECYCLE_STATUSES:
+            lifecycle = _initial_lifecycle_status(root_key, p, meta)
+        fields = [
+            ("lifecycle_status", lifecycle, ["status"]),
+            ("health_status", str(meta.get("health_status") or "").strip().strip('"') or "review_due", ["lifecycle_status"]),
+            ("last_health_reviewed_at", str(meta.get("last_health_reviewed_at") or "").strip().strip('"') or today, ["health_status"]),
+            ("next_review_at", str(meta.get("next_review_at") or "").strip().strip('"') or today, ["last_health_reviewed_at"]),
+            ("updated_at", today, ["created_at"]),
+        ]
+        fixed = raw
+        changed_fields = []
+        for key, value, after_keys in fields:
+            fixed2, changed = _set_frontmatter_field(fixed, key, value, after_keys)
+            if changed:
+                changed_fields.append(key)
+                fixed = fixed2
+        if changed_fields:
+            planned.append({"file": str(p.relative_to(base)), "fields": changed_fields})
+            if apply:
+                p.write_text(fixed, encoding="utf-8")
+                changed_count += 1
+    normalize = None
+    if apply and changed_count:
+        normalize = normalize_filename_dates(cfg, apply=True, touch_updated_at=False)
+    return {
+        "apply": apply,
+        "artifact_count": len(formal_artifact_files(cfg)),
+        "metadata_change_count": len(planned),
+        "written_count": changed_count,
+        "planned": planned,
+        "normalize": normalize,
+    }
+
+
 def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
     template_issues = []
     # Template for 10-layer files: 20 fields in exact order
@@ -2371,6 +3484,10 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
                 rel = str(p.relative_to(Path(cfg["ai_knowledge_base"])))
                 date_issues.append(rel)
     filename_dates = filename_date_audit(cfg)
+    source_quality = source_quality_audit(cfg)
+    evidence_gaps = evidence_gap_audit(cfg)
+    evidence_intake = evidence_intake_audit(cfg)
+    editorial_quality = editorial_quality_audit(cfg)
     yaml_issues = []
     for root_key in ("source_refinements", "topic_pages", "reusable_assets", "outputs"):
         root = kb_path(cfg, root_key)
@@ -2413,6 +3530,8 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
     portability = portability_audit(cfg)
     topic_pages = topic_page_audit(cfg)
     assets = asset_audit(cfg)
+    lifecycle = lifecycle_audit(cfg)
+    health = knowledge_health_audit(cfg)
     outputs = [evaluate_output_file(Path(cfg["ai_knowledge_base"]), p) for p in collect_markdown_files(kb_path(cfg, "outputs"))]
     verification = verification_status(cfg)
     output_review = output_review_status(cfg)
@@ -2438,10 +3557,14 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         blockers.append({"gate": "assets", "issue": "asset_relation_or_type_issues", "count": assets["asset_issue_count"]})
     if assets["output_issue_count"]:
         blockers.append({"gate": "outputs", "issue": "missing_parent_topic_or_related_assets", "count": assets["output_issue_count"]})
+    if lifecycle["issue_count"]:
+        warnings.append({"gate": "lifecycle", "issue": "artifacts_need_lifecycle_review_or_demotion_decision", "count": lifecycle["issue_count"]})
+    if health["issue_count"]:
+        warnings.append({"gate": "knowledge_health", "issue": "artifacts_need_health_review", "count": health["issue_count"]})
     def evidence_minimum(root_key: str, meta: dict[str, Any], path: Path) -> int:
         if root_key == "topic_pages":
             if "MOC" in path.parts or "moc" in {part.lower() for part in path.parts}:
-                return 1
+                return 0
             return 3
         if root_key == "reusable_assets":
             asset_type = str(meta.get("asset_type") or "").strip().lower()
@@ -2465,9 +3588,12 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         for p in collect_markdown_files(root):
             meta, _body = split_frontmatter(p.read_text("utf-8", errors="replace"))
             ef = meta.get("evidence_from", meta.get("supported_by", []))
+            minimum = evidence_minimum(root_key, meta, p)
+            if minimum == 0:
+                continue
             if not isinstance(ef, list) or len(ef) == 0:
                 evidence_missing += 1
-            elif len(ef) < evidence_minimum(root_key, meta, p):
+            elif len(ef) < minimum:
                 evidence_insufficient += 1
     if evidence_missing:
         blockers.append({"gate": "evidence", "issue": "artifacts_missing_evidence_from_refinements", "count": evidence_missing})
@@ -2484,6 +3610,16 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
         blockers.append({"gate": "verification", "issue": "unresolved_output_fact_verification", "count": verification["unresolved_output_count"]})
     if verification["pending_count"]:
         warnings.append({"gate": "verification", "issue": "pending_fact_verification", "count": verification["pending_count"]})
+    weak_sources = source_quality["tier_counts"].get("D", 0) + source_quality["flag_counts"].get("stale_high_sensitivity", 0)
+    if weak_sources:
+        warnings.append({"gate": "source_quality", "issue": "low_tier_or_stale_sources_should_not_drive_promotion", "count": weak_sources})
+    if evidence_gaps["gap_count"]:
+        warnings.append({"gate": "evidence_gaps", "issue": "artifacts_need_bounded_evidence_fill_or_downgrade_decision", "count": evidence_gaps["gap_count"]})
+    if not evidence_intake["passed"]:
+        warnings.append({"gate": "evidence_intake", "issue": "system_evidence_fill_intake_skeleton_missing", "count": evidence_intake["missing_count"]})
+    editorial_attention = editorial_quality["needs_attention_count"]
+    if editorial_attention:
+        warnings.append({"gate": "editorial_quality", "issue": "outputs_need_editorial_revision_or_argument_repair", "count": editorial_attention})
     return {
         "passed": not blockers,
         "blockers": blockers,
@@ -2504,6 +3640,17 @@ def quality_gate(cfg: dict[str, Any]) -> dict[str, Any]:
             "verification_pending": verification["pending_count"],
             "verification_unresolved_outputs": verification["unresolved_output_count"],
             "filename_date_issues": filename_dates["issue_count"],
+            "lifecycle_issues": lifecycle["issue_count"],
+            "knowledge_health_issues": health["issue_count"],
+            "source_quality_tiers": source_quality["tier_counts"],
+            "source_quality_flags": source_quality["flag_counts"],
+            "evidence_gap_count": evidence_gaps["gap_count"],
+            "evidence_gap_priorities": evidence_gaps["priority_counts"],
+            "evidence_gap_types": evidence_gaps["gap_type_counts"],
+            "evidence_intake_passed": evidence_intake["passed"],
+            "evidence_intake_missing": evidence_intake["missing_count"],
+            "editorial_quality_statuses": editorial_quality["status_counts"],
+            "editorial_weak_dimensions": editorial_quality["weak_dimension_counts"],
         },
     }
 
@@ -2725,6 +3872,19 @@ def cmd_evaluate_outputs(args: argparse.Namespace) -> None:
     print(json.dumps({"outputs": len(results), "written": str(system_file(cfg, "output-quality-review.md")) if args.apply else None, "results": results}, ensure_ascii=False, indent=2))
 
 
+def cmd_audit_editorial_quality(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = editorial_quality_audit(cfg)
+    if args.apply:
+        system_file(cfg, "editorial-quality-review.md").write_text(render_editorial_quality(result), encoding="utf-8")
+        append_operation_log(cfg, "audit-editorial-quality", f"Reviewed {result['output_count']} outputs; needs_attention={result['needs_attention_count']}",
+                             {"outputs": result["output_count"], "needs_attention": result["needs_attention_count"], "statuses": result["status_counts"]})
+    print(json.dumps({"written": str(system_file(cfg, "editorial-quality-review.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+    if args.strict and result["needs_attention_count"]:
+        raise SystemExit(2)
+
+
 def cmd_output_review_status(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
     require_valid_config(cfg)
@@ -2752,6 +3912,46 @@ def cmd_audit_assets(args: argparse.Namespace) -> None:
     if args.apply:
         system_file(cfg, "asset-relation-audit.md").write_text(render_asset_audit(result), encoding="utf-8")
     print(json.dumps({"written": str(system_file(cfg, "asset-relation-audit.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+
+
+def cmd_audit_source_quality(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = source_quality_audit(cfg)
+    if args.apply:
+        system_file(cfg, "source-quality-audit.md").write_text(render_source_quality_audit(result), encoding="utf-8")
+    print(json.dumps({"written": str(system_file(cfg, "source-quality-audit.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+    if args.strict and result["tier_counts"].get("D", 0):
+        raise SystemExit(2)
+
+
+def cmd_audit_lifecycle(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = lifecycle_audit(cfg)
+    if args.apply:
+        system_file(cfg, "lifecycle-audit.md").write_text(render_lifecycle_audit(result), encoding="utf-8")
+    print(json.dumps({"written": str(system_file(cfg, "lifecycle-audit.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+    if args.strict and result["issue_count"]:
+        raise SystemExit(2)
+
+
+def cmd_audit_knowledge_health(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = knowledge_health_audit(cfg)
+    if args.apply:
+        system_file(cfg, "knowledge-health.md").write_text(render_knowledge_health(result), encoding="utf-8")
+    print(json.dumps({"written": str(system_file(cfg, "knowledge-health.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+    if args.strict and result["issue_count"]:
+        raise SystemExit(2)
+
+
+def cmd_init_lifecycle_health(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = initialize_lifecycle_health(cfg, apply=args.apply)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def cmd_audit_relations(args: argparse.Namespace) -> None:
@@ -2806,6 +4006,45 @@ def cmd_quality_gate(args: argparse.Namespace) -> None:
     print(json.dumps({"written": str(system_file(cfg, "quality-gate.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
     if args.strict and not result["passed"]:
         raise SystemExit(2)
+
+
+def cmd_audit_evidence_gaps(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = evidence_gap_audit(cfg)
+    if args.apply:
+        system_file(cfg, "evidence-gap-registry.md").write_text(render_evidence_gap_registry(result), encoding="utf-8")
+        append_operation_log(cfg, "audit-evidence-gaps", f"Found {result['gap_count']} bounded evidence gaps",
+                             {"gap_count": result["gap_count"], "priorities": result["priority_counts"]})
+    print(json.dumps({"written": str(system_file(cfg, "evidence-gap-registry.md")) if args.apply else None, **result}, ensure_ascii=False, indent=2))
+    if args.strict and result["gap_count"]:
+        raise SystemExit(2)
+
+
+def cmd_init_evidence_intake(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = init_evidence_intake(cfg, apply=args.apply)
+    audit = evidence_intake_audit(cfg)
+    if args.apply:
+        system_file(cfg, "evidence-intake-audit.md").write_text(render_evidence_intake_audit(audit), encoding="utf-8")
+        system_file(cfg, "source-capabilities.md").write_text(render_source_capabilities(cfg, audit), encoding="utf-8")
+        append_operation_log(cfg, "init-evidence-intake", f"Initialized evidence intake skeleton; missing after init={audit['missing_count']}",
+                             {"created": result["created_count"], "missing_after_init": audit["missing_count"]})
+    print(json.dumps({"written": [str(system_file(cfg, "evidence-intake-audit.md")), str(system_file(cfg, "source-capabilities.md"))] if args.apply else [], **result, "audit": audit}, ensure_ascii=False, indent=2))
+
+
+def cmd_audit_evidence_intake(args: argparse.Namespace) -> None:
+    cfg = load_config(args.config)
+    require_valid_config(cfg)
+    result = evidence_intake_audit(cfg)
+    if args.apply:
+        system_file(cfg, "evidence-intake-audit.md").write_text(render_evidence_intake_audit(result), encoding="utf-8")
+        system_file(cfg, "source-capabilities.md").write_text(render_source_capabilities(cfg, result), encoding="utf-8")
+    print(json.dumps({"written": [str(system_file(cfg, "evidence-intake-audit.md")), str(system_file(cfg, "source-capabilities.md"))] if args.apply else [], **result}, ensure_ascii=False, indent=2))
+    if args.strict and not result["passed"]:
+        raise SystemExit(2)
+
 
 def cmd_gate_10(args: argparse.Namespace) -> None:
     cfg = load_config(args.config)
@@ -3084,6 +4323,12 @@ def main() -> None:
     p_eval.add_argument("--apply", action="store_true")
     p_eval.set_defaults(func=cmd_evaluate_outputs)
 
+    p_editorial_quality = sub.add_parser("audit-editorial-quality")
+    p_editorial_quality.add_argument("--config", required=True, type=Path)
+    p_editorial_quality.add_argument("--apply", action="store_true")
+    p_editorial_quality.add_argument("--strict", action="store_true")
+    p_editorial_quality.set_defaults(func=cmd_audit_editorial_quality)
+
     p_output_review = sub.add_parser("output-review")
     p_output_review.add_argument("--config", required=True, type=Path)
     p_output_review.add_argument("--apply", action="store_true")
@@ -3103,6 +4348,46 @@ def main() -> None:
     p_asset_audit.add_argument("--config", required=True, type=Path)
     p_asset_audit.add_argument("--apply", action="store_true")
     p_asset_audit.set_defaults(func=cmd_audit_assets)
+
+    p_source_quality = sub.add_parser("audit-source-quality")
+    p_source_quality.add_argument("--config", required=True, type=Path)
+    p_source_quality.add_argument("--apply", action="store_true")
+    p_source_quality.add_argument("--strict", action="store_true")
+    p_source_quality.set_defaults(func=cmd_audit_source_quality)
+
+    p_evidence_gaps = sub.add_parser("audit-evidence-gaps")
+    p_evidence_gaps.add_argument("--config", required=True, type=Path)
+    p_evidence_gaps.add_argument("--apply", action="store_true")
+    p_evidence_gaps.add_argument("--strict", action="store_true")
+    p_evidence_gaps.set_defaults(func=cmd_audit_evidence_gaps)
+
+    p_init_evidence_intake = sub.add_parser("init-evidence-intake")
+    p_init_evidence_intake.add_argument("--config", required=True, type=Path)
+    p_init_evidence_intake.add_argument("--apply", action="store_true")
+    p_init_evidence_intake.set_defaults(func=cmd_init_evidence_intake)
+
+    p_audit_evidence_intake = sub.add_parser("audit-evidence-intake")
+    p_audit_evidence_intake.add_argument("--config", required=True, type=Path)
+    p_audit_evidence_intake.add_argument("--apply", action="store_true")
+    p_audit_evidence_intake.add_argument("--strict", action="store_true")
+    p_audit_evidence_intake.set_defaults(func=cmd_audit_evidence_intake)
+
+    p_lifecycle_audit = sub.add_parser("audit-lifecycle")
+    p_lifecycle_audit.add_argument("--config", required=True, type=Path)
+    p_lifecycle_audit.add_argument("--apply", action="store_true")
+    p_lifecycle_audit.add_argument("--strict", action="store_true")
+    p_lifecycle_audit.set_defaults(func=cmd_audit_lifecycle)
+
+    p_health_audit = sub.add_parser("audit-knowledge-health")
+    p_health_audit.add_argument("--config", required=True, type=Path)
+    p_health_audit.add_argument("--apply", action="store_true")
+    p_health_audit.add_argument("--strict", action="store_true")
+    p_health_audit.set_defaults(func=cmd_audit_knowledge_health)
+
+    p_init_lifecycle_health = sub.add_parser("init-lifecycle-health")
+    p_init_lifecycle_health.add_argument("--config", required=True, type=Path)
+    p_init_lifecycle_health.add_argument("--apply", action="store_true")
+    p_init_lifecycle_health.set_defaults(func=cmd_init_lifecycle_health)
 
     p_relation_audit = sub.add_parser("audit-relations")
     p_relation_audit.add_argument("--config", required=True, type=Path)
