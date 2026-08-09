@@ -51,6 +51,11 @@ from kbm.application.source_verification import (
     verification_items, verification_result_row, verification_status,
 )
 from kbm.application.source_inventory import audit_sources
+from kbm.application.source_index import (
+    SOURCE_EXTS, SOURCE_TYPE_ALIASES, file_sha256, iter_sources,
+    normalize_index_obj, normalize_source_type, read_processed, split_topics,
+    stable_source_id,
+)
 from kbm.application.evidence_intake import (
     evidence_intake_audit, evidence_intake_expected_dirs, evidence_intake_root,
     init_evidence_intake as _init_evidence_intake,
@@ -68,7 +73,6 @@ from kbm.platform.clock import now_iso
 from kbm.platform.jsonl import read_jsonl_objects as read_index_objects, write_jsonl
 from kbm.platform.dates import parse_date as _parse_date
 
-SOURCE_EXTS = {".md", ".markdown", ".txt", ".html", ".htm", ".pdf", ".epub", ".docx"}
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 def _tracked_package_files() -> list[Path]:
     """Compatibility wrapper for callers that import the legacy script."""
@@ -89,23 +93,6 @@ INDEX_FIELDS = [
     "fact_risk",
     "fact_check_required",
 ]
-SOURCE_TYPE_ALIASES = {
-    "公众号": "public_account_article",
-    "public_account": "public_account_article",
-    "public_accounts": "public_account_article",
-    "public_account_article": "public_account_article",
-    "wechat": "public_account_article",
-    "wechat_article": "public_account_article",
-    "电子书": "ebook",
-    "book": "ebook",
-    "ebook": "ebook",
-    "article": "article",
-    "web": "web_article",
-    "webpage": "web_article",
-    "web_article": "web_article",
-}
-
-
 
 LIFECYCLE_STATUSES = {
     "candidate", "draft", "active", "needs_revision", "needs_evidence",
@@ -186,86 +173,6 @@ def ensure_tree(cfg: dict[str, Any]) -> None:
 
 def init_evidence_intake(cfg: dict[str, Any], apply: bool = False) -> dict[str, Any]:
     return _init_evidence_intake(cfg, apply=apply, prepare_system=ensure_system_files)
-
-
-def file_sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def split_topics(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return [str(v).strip(" #[]") for v in value if str(v).strip(" #[]")]
-    text = str(value)
-    text = text.replace("，", ",").replace("、", ",").replace(";", ",")
-    return [part.strip(" #[]") for part in text.split(",") if part.strip(" #[]")]
-
-
-def normalize_source_type(value: Any) -> str:
-    raw = str(value or "").strip()
-    return SOURCE_TYPE_ALIASES.get(raw, raw or "unknown")
-
-
-def stable_source_id(obj: dict[str, Any]) -> str:
-    raw = obj.get("source_sha256") or obj.get("source_path") or obj.get("output_file") or obj.get("title") or json.dumps(obj, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha256(str(raw).encode("utf-8")).hexdigest()[:16]
-
-
-def normalize_index_obj(obj: dict[str, Any]) -> dict[str, Any]:
-    source_path = obj.get("source_path") or obj.get("source_file") or obj.get("file") or ""
-    output_file = obj.get("output_file") or obj.get("refinement_file") or obj.get("note_path") or ""
-    title = obj.get("title") or (Path(source_path).stem if source_path else Path(output_file).stem if output_file else "")
-    normalized = {
-        "schema_version": int(obj.get("schema_version") or 1),
-        "source_id": obj.get("source_id") or "",
-        "source_path": str(source_path),
-        "source_sha256": obj.get("source_sha256") or obj.get("sha256") or "",
-        "source_type": normalize_source_type(obj.get("source_type") or obj.get("type")),
-        "title": str(title),
-        "processed_at": obj.get("processed_at") or obj.get("created_at") or "",
-        "output_file": str(output_file),
-        "topics": split_topics(obj.get("topics") or obj.get("tags") or obj.get("connected_topics")),
-        "status": obj.get("status") or "processed",
-        "fact_risk": obj.get("fact_risk") or obj.get("risk") or "unknown",
-        "fact_check_required": bool(obj.get("fact_check_required", False)),
-    }
-    normalized["source_id"] = normalized["source_id"] or stable_source_id(normalized)
-    return normalized
-
-
-def read_processed(cfg: dict[str, Any]) -> tuple[set[str], set[str], int]:
-    index = system_file(cfg, "processed-index.jsonl")
-    paths: set[str] = set()
-    hashes: set[str] = set()
-    count = 0
-    rows, _errors = read_index_objects(index)
-    for obj in rows:
-        count += 1
-        norm = normalize_index_obj(obj)
-        if norm.get("source_path"):
-            paths.add(str(Path(norm["source_path"]).expanduser().resolve()))
-        if norm.get("source_sha256"):
-            hashes.add(norm["source_sha256"])
-    return paths, hashes, count
-
-
-def iter_sources(cfg: dict[str, Any]) -> list[Path]:
-    files: list[Path] = []
-    for raw in cfg.get("source_libraries", {}).values():
-        if not raw:
-            continue
-        root = Path(raw)
-        if not root.exists():
-            continue
-        for p in root.rglob("*"):
-            if p.is_file() and p.suffix.lower() in SOURCE_EXTS:
-                files.append(p.resolve())
-    return sorted(files, key=lambda p: str(p))
 
 
 def audit(cfg: dict[str, Any], include_hashes: bool = False) -> dict[str, Any]:
