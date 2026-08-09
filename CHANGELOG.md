@@ -6,6 +6,22 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-09
+
+### Added
+
+- Dedicated promotion module for cluster rules, source matching, five-dimension scoring, non-promotion reasons, artifact candidates, and review rendering.
+- Portable naming domain primitive and promotion-module feature tests.
+
+### Changed
+
+- Existing `promote` and `run` commands retain their output contracts while delegating topic decisions to the extracted module.
+- `kb_manager.py` decreased from 3833 to 3601 lines; its line ratchet decreased to 3605.
+
+### Fixed
+
+- Portable cluster-rule lookup now resolves from the skill root after moving code from `scripts/` into `kbm/application/`.
+
 ## [0.7.2] - 2026-08-09
 
 ### Added
