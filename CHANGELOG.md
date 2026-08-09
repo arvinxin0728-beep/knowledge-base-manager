@@ -6,6 +6,22 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-08-09
+
+### Added
+
+- Source-quality and verification module covering evidence channels, authority, freshness, bias, A-D tiers, risk signals, verification ledgers, and stale-result detection.
+- Shared platform date parser and regression tests for primary-versus-marketing weighting and stale verification.
+
+### Changed
+
+- Existing source-quality and verification CLI commands retain their contracts while delegating to the governance module.
+- `kb_manager.py` decreased from 3347 to 2974 lines; its line ratchet decreased to 2975.
+
+### Fixed
+
+- Quantified, ranking, report-year, and forecast regexes preserve their original digit/whitespace semantics after module extraction.
+
 ## [0.7.4] - 2026-08-09
 
 ### Added

@@ -33,7 +33,7 @@ def source_content_hash(tracked: list[Path]) -> str:
     return digest.hexdigest()
 
 
-def package_lint(skill_root: Path, *, release_version: str = "v0.7.4") -> dict[str, Any]:
+def package_lint(skill_root: Path, *, release_version: str = "v0.7.5") -> dict[str, Any]:
     issues: list[dict[str, str]] = []
     files = sorted((path for path in skill_root.rglob("*") if path.is_file()), key=str)
     for relative in REQUIRED_RELEASE_FILES:
