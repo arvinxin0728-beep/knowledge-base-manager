@@ -4,6 +4,30 @@ All notable changes to this project should be recorded here.
 
 The format follows Keep a Changelog conventions loosely, and this project uses semantic versioning while it is distributed publicly.
 
+## [Unreleased]
+
+## [0.6.0] - 2026-08-09
+
+### Added
+
+- Executable `architecture-contract.json` defining modular-monolith boundaries, current complexity ratchets, target sizes, legacy CLI contracts, and allowed script dependencies.
+- `scripts/architecture_check.py --strict` and `tests/test_architecture.py` to prevent further monolith growth or accidental CLI contract loss before decomposition.
+- Target module ownership for Intake, Refinement, Synthesis, Assets, Publication, Governance, and Platform.
+- `kbm/domain/researcher.py` with an explicit researcher identity and isolation contract.
+- Shared `kbm/platform` modules for configuration, researcher-scoped paths, runtime isolation, backups, and operation logs.
+- Multi-researcher regression tests proving independent SQLite ledgers, source discovery state, and system-file paths.
+- `kb_researcher.py` commands for registry initialization, researcher registration, selection, inspection, diagnosis, and profile-driven workspace initialization.
+- Dependency-free regression runner with researcher registry, duplicate identity, shared-workspace rejection, and video-profile tests.
+- Video researcher profile with device-local runtime, video-only source mapping, derived-media directories, and an explicit disabled adapter state until ingestion is implemented.
+
+### Changed
+
+- `ARCHITECTURE.md` now distinguishes the current monolith from the target module architecture and defines a strangler-style migration sequence.
+- Release checks now include the architecture gate.
+- `kb_manager.py` and `kb_pipeline.py` now consume the shared platform core while preserving their existing CLI commands.
+- Legacy configs are mapped to an implicit researcher without rewriting the config file; new `init` runs write an explicit researcher object.
+- Researcher selection is stored only in the registry; knowledge, active state, SQLite ledgers, and caches remain researcher-local.
+
 ## [0.1.3] - 2026-07-27
 
 ### Added

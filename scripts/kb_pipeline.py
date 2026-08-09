@@ -16,7 +16,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from ebook_probe import candidate_chapters, chunk_text, extract
+from kbm.platform.config import load_config
+from kbm.platform.paths import (
+    db_path, legacy_runtime_dir, local_runtime_dir, runtime_dir,
+    system_active_file, system_dir,
+)
 
 
 STATES = ("discovered", "extracted", "refining", "refined", "committed", "failed")
@@ -35,62 +42,6 @@ REQUIRED_HEADING_GROUPS = (
 
 def now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def load_config(path: Path) -> dict[str, Any]:
-    cfg = json.loads(path.read_text(encoding="utf-8"))
-    required = ("ai_knowledge_base", "mapping", "source_libraries")
-    missing = [key for key in required if not cfg.get(key)]
-    if missing:
-        raise SystemExit(f"Missing config fields: {', '.join(missing)}")
-    return cfg
-
-
-def system_dir(cfg: dict[str, Any]) -> Path:
-    return Path(cfg["ai_knowledge_base"]) / cfg["mapping"]["system"]
-
-
-def system_active_file(cfg: dict[str, Any], name: str) -> Path:
-    root = system_dir(cfg)
-    active = root / "active" / name
-    fallback = root / name
-    if active.exists():
-        return active
-    if fallback.exists():
-        return fallback
-    return active
-
-
-def legacy_runtime_dir(cfg: dict[str, Any]) -> Path:
-    return system_dir(cfg) / "runtime"
-
-
-def local_runtime_dir(cfg: dict[str, Any]) -> Path:
-    override = os.environ.get("KBM_RUNTIME_ROOT")
-    if override:
-        root = Path(override).expanduser()
-    elif sys.platform == "darwin":
-        root = Path.home() / "Library" / "Application Support" / "knowledge-base-manager"
-    elif os.name == "nt" and os.environ.get("LOCALAPPDATA"):
-        root = Path(os.environ["LOCALAPPDATA"]) / "knowledge-base-manager"
-    else:
-        root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "knowledge-base-manager"
-    identity = hashlib.sha256(str(Path(cfg["ai_knowledge_base"]).expanduser().resolve()).encode("utf-8")).hexdigest()[:12]
-    name = safe_name(str(cfg.get("name") or "knowledge-base")).lower().replace(" ", "-")
-    return root / f"{name}-{identity}" / "runtime"
-
-
-def runtime_dir(cfg: dict[str, Any]) -> Path:
-    storage = cfg.get("pipeline", {}).get("runtime_storage", "legacy")
-    if storage == "local":
-        return local_runtime_dir(cfg)
-    if storage != "legacy":
-        raise SystemExit("pipeline.runtime_storage_must_be_local_or_legacy")
-    return legacy_runtime_dir(cfg)
-
-
-def db_path(cfg: dict[str, Any]) -> Path:
-    return runtime_dir(cfg) / "pipeline.sqlite3"
 
 
 def directory_stats(path: Path) -> dict[str, Any]:

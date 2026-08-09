@@ -1,6 +1,6 @@
 # Knowledge Base Manager 中文说明
 
-当前版本：`v0.1.1`
+当前版本：`v0.6.0`
 
 许可证：MIT
 
@@ -8,9 +8,11 @@
 
 ## 这是什么
 
-`knowledge-base-manager` 是一个面向产出的研究型知识管理系统。
+`knowledge-base-manager` 是一个面向产出的研究型知识管理系统，也是一套可初始化多个独立研究员的研究员系统能力。
 
-它不是单纯的“文章总结工具”，也不是把资料搬进一个文件夹的自动化脚本。它的目标是把电子书、公众号文章、网页文章、报告、笔记等原始材料，逐步处理成可理解、可关联、可复用、可输出的知识资产。
+它不是单纯的“文章总结工具”，也不是把资料搬进一个文件夹的自动化脚本。它的目标是把电子书、公众号文章、网页文章、报告、笔记等原始材料，逐步处理成可理解、可关联、可复用、可输出的研究资产。
+
+在新定位下，一个“研究员”是一个独立配置的研究单元：它有自己的资料输入、研究过程、知识库、质量门禁和输出。一个电脑可以安装并运行多个研究员，不同研究员分别研究不同主题或项目；它们的知识输入、过程状态和输出默认相互隔离，但研究方法、评审标准、补证流程、模板和经过验证的闭环经验可以相互学习、抽象后共享。
 
 它最初以 Codex skill 的形式实现，但底层模型和脚本不绑定 Codex。其他 Agent 平台也可以把它作为“指令包 + 本地脚本工具包”使用。
 
@@ -27,18 +29,18 @@
 - 标签和双链很多，但不知道什么内容可以复用
 - 知识库看起来很丰富，但写文章、做方案、讲课、决策时用不上
 
-这个系统试图解决的问题是：如何让知识从“收集”逐步晋升为“产出能力”。
+这个系统试图解决的问题是：如何让知识从“收集”逐步晋升为“研究能力”和“产出能力”。
 
 ## 核心模型
 
-系统分成两大区域：
+系统的最小运行单位是“研究员”。每个研究员分成两大区域：
 
 1. 原文库：存放用户提供的电子书、文章、公众号导出、网页剪藏、报告等原始材料。
-2. AI 知识库：存放被读懂、压缩、结构化、可复用后的知识内容。
+2. AI 知识库：存放被读懂、压缩、结构化、可复用后的研究内容。
 
-`10-source-refinements` 不是原文库，而是原文被阅读后的第一层处理结果。每一条来源精炼都必须能追溯到 `source_libraries` 中的原始材料。
+`10-source-refinements` 不是原文库，而是原文被阅读后的第一层处理结果。每一条来源精炼都必须能追溯到该研究员 `source_libraries` 中的原始材料。
 
-默认完整结构是：
+单研究员的默认完整结构是：
 
 ```text
 Knowledge-System/
@@ -55,6 +57,36 @@ Knowledge-System/
 ```
 
 这五层不是文件夹命名要求，而是通用知识流转模型。不同用户可以把它映射到自己的目录结构里。
+
+多研究员的推荐结构是：
+
+```text
+Research-System/
+├── shared-methods/                  # 可共享的方法、rubric、模板、闭环经验
+├── researchers/
+│   ├── ai-knowledge-researcher/      # 研究员 A：独立输入、过程和输出
+│   │   ├── Sources/
+│   │   └── AI-Knowledge-Base/
+│   └── sales-researcher/             # 研究员 B：独立输入、过程和输出
+│       ├── Sources/
+│       └── AI-Knowledge-Base/
+└── registry/
+    └── researchers.json              # 研究员发现登记，不存放共享运行状态
+```
+
+原则是：技能和方法可以共享，研究记忆默认隔离。一个研究员的结论不能悄悄变成另一个研究员的事实依据；如果需要跨研究员引用，必须显式导入、标注来源，并按证据层级处理。
+
+研究员控制面使用独立脚本，避免继续扩张知识处理主脚本：
+
+```bash
+python3 scripts/kb_researcher.py registry-init --registry <researchers.json> --apply
+python3 scripts/kb_researcher.py register --registry <researchers.json> --config <kb-config.json> --apply
+python3 scripts/kb_researcher.py list --registry <researchers.json>
+python3 scripts/kb_researcher.py select --registry <researchers.json> --researcher-id <id> --apply
+python3 scripts/kb_researcher.py doctor --registry <researchers.json>
+```
+
+注册表只用于发现和选择研究员，不保存共享任务状态。视频 profile 可以初始化视频输入、转录文本和关键帧目录，但在视频适配器实现前会明确标记为 `adapter_not_installed`，不能据此宣称视频采集和转录已经可运行。
 
 例如，一个用户可以使用中文目录：
 
@@ -76,6 +108,15 @@ Knowledge-System/
 
 ```json
 {
+  "name": "my-researcher",
+  "researcher": {
+    "id": "my-researcher",
+    "name": "My Researcher",
+    "domain": "研究主题或项目范围",
+    "role": "researcher",
+    "isolation": "independent_workspace",
+    "shared_methods": []
+  },
   "source_libraries": {
     "ebooks": "/absolute/path/to/Sources/Ebooks",
     "articles": "/absolute/path/to/Sources/Articles",
@@ -253,6 +294,7 @@ updated_at: "YYYY-MM-DD"
 
 - 长期阅读电子书、公众号、文章、报告的人
 - 希望把阅读转化为文章、课程、咨询、研究、产品判断的人
+- 希望在一台电脑上运行多个独立研究员，分别研究不同主题或项目的人
 - 使用 Obsidian 或本地 Markdown 文件管理知识的人
 - 不满足于“收藏”和“摘要”，希望建立可复用知识系统的人
 
@@ -374,6 +416,17 @@ python3 scripts/kb_manager.py doctor --config /absolute/path/to/AI-Knowledge-Bas
 
 如果你没有现成目录，可以让系统从零创建一个默认结构。
 
+如果你要创建多个研究员，需要额外说明：
+
+1. 研究员名称和研究范围
+   例如：AI 知识管理研究员、餐饮行业研究员、产品经理研究员、课程学习研究员
+
+2. 该研究员的独立输入和输出目录
+   每个研究员应有自己的原文库、AI 知识库和 `00-system/active` 运行状态。
+
+3. 是否允许共享方法
+   默认只共享方法、rubric、模板和闭环经验，不共享未经显式导入的领域结论。
+
 ## 常见使用方式
 
 ### 初始化知识库
@@ -383,6 +436,14 @@ python3 scripts/kb_manager.py doctor --config /absolute/path/to/AI-Knowledge-Bas
 ```
 
 系统会创建基础目录、配置文件和系统索引。
+
+### 初始化一个研究员
+
+```text
+使用 knowledge-base-manager 初始化一个研究员，研究主题是 AI 知识管理
+```
+
+系统会为该研究员创建或映射独立的来源库、AI 知识库、系统状态和质量门禁。多个研究员可以共用同一套技能包，但不能共用同一套 `processed-index.jsonl`、`active-run-state.json`、验证结果或输出目录，除非这是一个明确设计过的共享研究项目。
 
 ### 处理未读资料
 
@@ -434,6 +495,8 @@ python3 scripts/kb_manager.py doctor --config /absolute/path/to/AI-Knowledge-Bas
 - 它和已有知识有什么关系？
 
 因此，它更像一个知识生产系统，而不是一个摘要工具。
+
+在多研究员定位下，它进一步像一个“研究员操作系统”：不同研究员各自积累领域知识，方法层持续共享和进化，避免所有主题混在一个知识库里互相污染。
 
 ## 和 Karpathy 风格 LLM Wiki 的区别
 
@@ -494,7 +557,7 @@ Karpathy 风格 LLM Wiki 更强调把信息整理成面向 LLM 使用的 Wiki，
 
 ## 当前成熟度
 
-这个项目当前是 `v0.1.1`，可以作为 Beta 版使用：
+这个项目当前是 `v0.6.0`，可以作为 Beta 版使用：
 
 - 支持初始化和目录映射
 - 支持来源处理和索引
@@ -514,16 +577,23 @@ Karpathy 风格 LLM Wiki 更强调把信息整理成面向 LLM 使用的 Wiki，
 
 ## 发布与维护
 
-本项目使用语义版本号。当前公开版本为 `v0.1.1`。
+本项目使用语义版本号。当前公开版本为 `v0.6.0`，下一阶段将继续拆分处理单体并实现来源适配器。
 
 发布到 GitHub 前至少运行：
 
 ```bash
 python3 scripts/kb_manager.py package-lint --strict
+python3 scripts/architecture_check.py --strict
 python3 tests/e2e_new_user.py
 python3 tests/test_kb_manager.py
 python3 tests/test_pipeline.py
+python3 tests/test_architecture.py
+python3 tests/run_all.py
 ```
+
+架构治理采用棘轮策略：`architecture-contract.json` 记录当前复杂度上限、目标规模、旧 CLI 契约和允许依赖。当前上限只用于禁止系统继续恶化；每完成一次模块抽离，都必须下调相应上限，直到 `kb_manager.py`、`kb_pipeline.py` 和 `SKILL.md` 收敛到目标规模。
+
+第一批模块化内核已经抽离到 `kbm/domain` 和 `kbm/platform`。旧知识库不需要立即修改配置，会被兼容识别为一个隐式研究员；新初始化可以使用 `--researcher-id`、`--researcher-name` 和 `--research-domain` 写入明确身份。每个研究员的系统文件和设备本地运行目录按身份隔离。
 
 发布包必须包含：
 

@@ -15,38 +15,16 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-DEFAULT_MAPPING = {
-    "system": "00-system",
-    "source_refinements": "10-source-refinements",
-    "topic_pages": "20-topic-pages",
-    "reusable_assets": "30-reusable-assets",
-    "outputs": "40-outputs",
-}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-DEFAULT_SOURCE_SUBDIRS = {
-    "ebooks": "ebooks",
-    "articles": "articles",
-    "public_accounts": "public-accounts",
-}
-
-DEFAULT_TOPIC_PAGE_SUBDIRS = {
-    "pages": "pages",
-    "moc": "moc",
-}
-
-DEFAULT_OUTPUT_SUBDIRS = {
-    "feynman": "feynman-explanations",
-    "article_drafts": "article-drafts",
-    "solution_materials": "solution-materials",
-    "reviews": "reviews",
-}
-
-DEFAULT_REUSABLE_ASSET_SUBDIRS = {
-    "methods": "methods",
-    "cases": "cases",
-    "expressions": "expressions",
-    "frameworks": "frameworks",
-}
+from kbm.domain.researcher import slug
+from kbm.platform.config import (
+    DEFAULT_MAPPING, DEFAULT_OUTPUT_SUBDIRS, DEFAULT_REUSABLE_ASSET_SUBDIRS,
+    DEFAULT_SOURCE_SUBDIRS, DEFAULT_TOPIC_PAGE_SUBDIRS, config_defaults,
+    deep_defaults, load_config, require_valid_config, validate_config, write_config,
+)
+from kbm.platform.paths import kb_path, system_file, topic_pages_content_dir, topic_pages_moc_dir
+from kbm.platform.storage import append_operation_log, backup_file
 
 SOURCE_EXTS = {".md", ".markdown", ".txt", ".html", ".htm", ".pdf", ".epub", ".docx"}
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -102,47 +80,6 @@ SOURCE_TYPE_ALIASES = {
 }
 
 
-def deep_defaults(value: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
-    """Fill missing nested defaults without overwriting user configuration."""
-    out = dict(value)
-    for key, default in defaults.items():
-        if key not in out:
-            out[key] = default
-        elif isinstance(out[key], dict) and isinstance(default, dict):
-            out[key] = deep_defaults(out[key], default)
-    return out
-
-
-def config_defaults() -> dict[str, Any]:
-    return {
-        "version": 1,
-        "language": "zh-CN",
-        "source_libraries": {},
-        "mapping": dict(DEFAULT_MAPPING),
-        "source_refinement_subdirs": dict(DEFAULT_SOURCE_SUBDIRS),
-        "topic_page_subdirs": dict(DEFAULT_TOPIC_PAGE_SUBDIRS),
-        "reusable_asset_subdirs": dict(DEFAULT_REUSABLE_ASSET_SUBDIRS),
-        "output_subdirs": dict(DEFAULT_OUTPUT_SUBDIRS),
-        "promotion_rules": {
-            "min_sources_for_topic": 3,
-            "allow_user_requested_topic": True,
-            "fact_check_before_public_output": True,
-        },
-        "integrations": {"obsidian": {"enabled": False}},
-        "pipeline": {"chunk_size": 5000, "default_batch_size": 10, "max_attempts": 3, "lease_minutes": 120, "runtime_storage": "legacy", "artifact_retention_days": 7},
-        "quality": {
-            "template_patterns": [
-                r"任务定义\s*->\s*工具/Skill 封装\s*->\s*权限与数据接入\s*->\s*自动执行\s*->\s*复盘迭代",
-                r"材料倾向于把 AI 能力包装为可执行流程或可复用 Skill",
-                r"解决如何把一个具体任务拆成 Agent、工具、权限、输入输出和执行链路的问题",
-                r"材料将问题拆解、结构表达或模型复用作为核心",
-                r"可作为 Agent/Skill 场景库案例",
-                r"文章的结构线索集中在",
-            ],
-            "boilerplate_topics": ["Agent工作流", "Skill设计", "自动化系统", "内容生产", "表达写作", "AI写作"],
-            "batch_model_repeat_threshold": 0.3,
-        },
-    }
 HIGH_RISK_PATTERNS = {
     "market_data": r"市场规模|增长率|同比|环比|渗透率|GMV|收入|利润|财报|业绩",
     "ranking": r"排行榜|排名|十大|TOP\s*\d",
@@ -164,149 +101,9 @@ HEALTH_STATUSES = {
 }
 
 
-def load_config(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        cfg = json.load(f)
-    return deep_defaults(cfg, config_defaults())
-
-
-def validate_config(cfg: dict[str, Any]) -> list[dict[str, str]]:
-    errors: list[dict[str, str]] = []
-    if cfg.get("version") != 1:
-        errors.append({"field": "version", "error": "unsupported_version"})
-    base_raw = cfg.get("ai_knowledge_base")
-    if not isinstance(base_raw, str) or not base_raw.strip():
-        errors.append({"field": "ai_knowledge_base", "error": "required_absolute_path"})
-    elif not Path(base_raw).expanduser().is_absolute():
-        errors.append({"field": "ai_knowledge_base", "error": "must_be_absolute"})
-    for key in DEFAULT_MAPPING:
-        value = cfg.get("mapping", {}).get(key)
-        if not isinstance(value, str) or not value.strip():
-            errors.append({"field": f"mapping.{key}", "error": "required_relative_path"})
-        elif Path(value).is_absolute() or ".." in Path(value).parts:
-            errors.append({"field": f"mapping.{key}", "error": "must_stay_inside_ai_knowledge_base"})
-    for key, value in cfg.get("source_libraries", {}).items():
-        if value and not Path(value).expanduser().is_absolute():
-            errors.append({"field": f"source_libraries.{key}", "error": "must_be_absolute"})
-    pipeline = cfg.get("pipeline", {})
-    if pipeline.get("runtime_storage") not in {"local", "legacy"}:
-        errors.append({"field": "pipeline.runtime_storage", "error": "must_be_local_or_legacy"})
-    retention = pipeline.get("artifact_retention_days")
-    if not isinstance(retention, int) or retention < 0:
-        errors.append({"field": "pipeline.artifact_retention_days", "error": "must_be_non_negative_integer"})
-    return errors
-
-
-def require_valid_config(cfg: dict[str, Any]) -> None:
-    errors = validate_config(cfg)
-    if errors:
-        raise SystemExit(json.dumps({"valid": False, "errors": errors}, ensure_ascii=False, indent=2))
-
-
-def write_config(path: Path, cfg: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def kb_path(cfg: dict[str, Any], key: str) -> Path:
-    return Path(cfg["ai_knowledge_base"]) / cfg["mapping"][key]
-
-
-def topic_pages_content_dir(cfg: dict[str, Any]) -> Path:
-    subdir = cfg.get("topic_page_subdirs", {}).get("pages")
-    root = kb_path(cfg, "topic_pages")
-    return root / subdir if subdir else root
-
-
-def topic_pages_moc_dir(cfg: dict[str, Any]) -> Path:
-    subdir = cfg.get("topic_page_subdirs", {}).get("moc")
-    root = kb_path(cfg, "topic_pages")
-    return root / subdir if subdir else root
-
-
-def system_file(cfg: dict[str, Any], name: str) -> Path:
-    root = kb_path(cfg, "system")
-    if name in _SYSTEM_ACTIVE_FILES:
-        p = root / "active" / name
-        if p.exists():
-            return p
-        fallback = root / name
-        if fallback.exists():
-            return fallback
-        return p
-    if name in _SYSTEM_REPORT_FILES:
-        p = root / "reports" / name
-        if p.exists():
-            return p
-        fallback = root / name
-        if fallback.exists():
-            return fallback
-        return p
-    return root / name
-
-
-_SYSTEM_ACTIVE_FILES = {
-    'processed-index.jsonl', 'active-run-state.json', 'run-log.jsonl',
-    'promotion-decision.jsonl', 'verification-queue.jsonl',
-    'verification-results.jsonl', 'output-review-results.jsonl',
-    'evidence-fill-ledger.jsonl', 'kb-config.json', 'obsidian-taxonomy.json',
-    'rules.md', 'topics.md',
-}
-
-_SYSTEM_REPORT_FILES = {
-    'topic-clusters.md', 'promotion-review.md', 'asset-output-candidates.md',
-    'quality-gate.md', 'gate-10.md', 'verification-status.md',
-    'output-quality-review.md', 'output-review-status.md',
-    'portability-audit.md', 'topic-page-audit.md', 'relation-audit.md',
-    'asset-relation-audit.md', 'lifecycle-audit.md', 'knowledge-health.md',
-    'source-quality-audit.md', 'evidence-gap-registry.md',
-    'editorial-quality-review.md',
-    'evidence-intake-audit.md', 'source-capabilities.md', 'inbox-review.md',
-}
-
-
 def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
-
-
-def backup_file(path: Path, max_backups: int = 5) -> Path | None:
-    """Create a timestamped backup under <parent>/backups/, keeping only max_backups."""
-    if not path.exists():
-        return None
-    backups_dir = path.parent / "backups"
-    backups_dir.mkdir(parents=True, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = backups_dir / f"{path.name}.{timestamp}"
-    shutil.copy2(path, backup_path)
-    
-    # Prune to max_backups
-    existing = sorted(backups_dir.glob(f"{path.name}.*"))
-    while len(existing) > max_backups:
-        oldest = existing.pop(0)
-        oldest.unlink(missing_ok=True)
-    
-    return backup_path
-
-
-
-def append_operation_log(cfg: dict[str, Any], command: str, summary: str, counts: dict[str, Any] | None = None, error: str | None = None) -> None:
-    """Append one operation record to run-log.jsonl in active/."""
-    log = system_file(cfg, "run-log.jsonl")
-    record = {
-        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "command": command,
-        "summary": summary,
-        "counts": counts or {},
-    }
-    if error:
-        record["error"] = error
-    try:
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception as e:
-        print(f"Warning: failed to write operation log: {e}", file=sys.stderr)
 
 
 def ensure_system_files(cfg: dict[str, Any]) -> None:
@@ -3707,7 +3504,7 @@ def package_lint() -> dict[str, Any]:
             "source_libraries",
             "跨平台使用",
             "脚本模式",
-            "v0.1.1",
+            "v0.6.0",
             "package-lint --strict",
         ]
         for term in required_readme_terms:
@@ -3751,6 +3548,14 @@ def cmd_init(args: argparse.Namespace) -> None:
             "name": args.name,
             "version": 1,
             "language": args.language,
+            "researcher": {
+                "id": args.researcher_id or slug(args.name),
+                "name": args.researcher_name or args.name,
+                "domain": args.research_domain,
+                "role": "researcher",
+                "isolation": "independent_workspace",
+                "shared_methods": [],
+            },
             "source_libraries": {"ebooks": args.ebooks, "articles": args.articles, "public_accounts": args.public_accounts},
             "ai_knowledge_base": args.ai_knowledge_base,
             "mapping": {"system": args.system_dir, "source_refinements": args.source_refinements_dir, "topic_pages": args.topic_pages_dir, "reusable_assets": args.reusable_assets_dir, "outputs": args.outputs_dir},
@@ -3759,7 +3564,7 @@ def cmd_init(args: argparse.Namespace) -> None:
             "reusable_asset_subdirs": {"methods": args.methods_subdir, "cases": args.cases_subdir, "expressions": args.expressions_subdir, "frameworks": args.frameworks_subdir},
             "output_subdirs": {"feynman": args.feynman_subdir, "article_drafts": args.article_drafts_subdir, "solution_materials": args.solution_materials_subdir, "reviews": args.reviews_subdir},
             "promotion_rules": {"min_sources_for_topic": 3, "allow_user_requested_topic": True, "fact_check_before_public_output": True},
-            "pipeline": {"chunk_size": 5000, "default_batch_size": 10, "max_attempts": 3, "lease_minutes": 120, "runtime_storage": "local", "artifact_retention_days": 7},
+            "pipeline": {"chunk_size": 5000, "default_batch_size": 10, "max_attempts": 3, "lease_minutes": 120, "runtime_storage": "local", "runtime_namespace": args.researcher_id or slug(args.name), "artifact_retention_days": 7},
         }
     if args.apply:
         require_valid_config(cfg)
@@ -4257,6 +4062,9 @@ def main() -> None:
     p_init.add_argument("--articles", default="")
     p_init.add_argument("--public-accounts", default="")
     p_init.add_argument("--name", default="my-knowledge-base")
+    p_init.add_argument("--researcher-id")
+    p_init.add_argument("--researcher-name")
+    p_init.add_argument("--research-domain", default="general research")
     p_init.add_argument("--language", default="zh-CN")
     p_init.add_argument("--system-dir", default=DEFAULT_MAPPING["system"])
     p_init.add_argument("--source-refinements-dir", default=DEFAULT_MAPPING["source_refinements"])
