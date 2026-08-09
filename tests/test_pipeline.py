@@ -237,6 +237,34 @@ def test_legacy_blank_output_is_reconciled_through_path_alias() -> None:
         temp.cleanup()
 
 
+def test_reconciliation_recovers_renamed_refinement_and_stale_output_path() -> None:
+    temp, config, sources = make_case()
+    try:
+        cfg = json.loads(config.read_text())
+        source = next(sources.glob("*.md")).resolve()
+        output = Path(cfg["ai_knowledge_base"]) / "10-source-refinements" / "articles" / "2026-08-09 2026-01-01 renamed.md"
+        output.parent.mkdir(parents=True)
+        historical_source = source.with_name("「article」-0.md")
+        output.write_text(
+            "---\nstage: 来源精炼\nsource_file: " + json.dumps(str(historical_source), ensure_ascii=False) + "\n---\n\n# Existing refinement\n",
+            encoding="utf-8",
+        )
+        index = Path(cfg["ai_knowledge_base"]) / "00-system" / "processed-index.jsonl"
+        index.parent.mkdir(parents=True)
+        index.write_text(json.dumps({
+            "source_path": str(source), "source_sha256": "",
+            "output_file": str(Path(temp.name) / "missing-old-name.md"),
+            "processed_at": "2026-01-01",
+        }) + "\n", encoding="utf-8")
+        result = invoke(config, "discover")
+        assert result["reconciled_committed"] == 1
+        assert invoke(config, "status")["states"]["committed"] == 1
+        repaired = json.loads(index.read_text(encoding="utf-8"))
+        assert repaired["output_file"] == str(output.resolve())
+    finally:
+        temp.cleanup()
+
+
 def test_reconciliation_recovers_a_refined_job() -> None:
     temp, config, _sources = make_case()
     root = Path(temp.name)
@@ -351,6 +379,7 @@ if __name__ == "__main__":
     test_source_type_filter_limits_prepare_and_claim()
     test_existing_index_is_reconciled_into_new_ledger()
     test_legacy_blank_output_is_reconciled_through_path_alias()
+    test_reconciliation_recovers_renamed_refinement_and_stale_output_path()
     test_reconciliation_recovers_a_refined_job()
     test_cleanup_is_dry_run_by_default_and_only_removes_safe_committed_artifacts()
     test_runtime_migration_preserves_state_rewrites_paths_and_retires_recoverably()

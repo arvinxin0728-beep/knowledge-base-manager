@@ -1,7 +1,7 @@
 interface:
-  display_name: "Knowledge Base Manager"
-  short_description: "Manage mapped AI knowledge-base workflows"
-  default_prompt: "Use $knowledge-base-manager to initialize, audit, process, and output from my mapped knowledge base."
+  display_name: "Researcher Knowledge Manager"
+  short_description: "Initialize and operate independent research knowledge systems"
+  default_prompt: "Use $knowledge-base-manager to initialize, audit, process, and output from my mapped researcher knowledge base."
 
 policy:
   allow_implicit_invocation: true

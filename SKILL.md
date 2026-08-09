@@ -1,18 +1,22 @@
 ---
 name: knowledge-base-manager
-description: Manage a mapped personal or portable knowledge-base system built from source libraries, AI-refined notes, topic pages, reusable assets, and outputs. Use when Codex needs to initialize or audit a knowledge base, map a user's folders to a general knowledge workflow, process unread ebooks/articles/public-account posts, manage WeChat/public-account Markdown libraries, read and refine books/articles/webpages, maintain processed indexes and topic candidates, decide whether to create topic pages, extract asset types such as methods/cases/expressions/frameworks, or generate Feynman explanations, article drafts, solution materials, reviews, and other reusable outputs. This is a single-install skill with embedded reading/refinement and public-account library modules.
+description: Initialize and operate one or many independent research agents, each with its own mapped source libraries, research process, knowledge base, topic synthesis, reusable assets, and outputs. Use when Codex needs to create, audit, or evolve a personal or portable research knowledge system; initialize multiple researchers on one computer; keep different researchers isolated by domain while allowing shared research methods; process unread ebooks/articles/public-account posts; manage WeChat/public-account Markdown libraries; read and refine books/articles/webpages; maintain indexes and topic candidates; decide whether to create topic pages; extract methods/cases/expressions/frameworks; or generate Feynman explanations, article drafts, solution materials, reviews, and other reusable outputs. This is a single-install skill with embedded reading/refinement and public-account library modules.
 ---
 
 # Knowledge Base Manager
 
 ## Purpose
 
-Operate a knowledge-base system as an integrated workflow, not as isolated summaries. Convert mapped source libraries into structured, reusable knowledge through four layers:
+Operate a researcher-oriented knowledge system as an integrated workflow, not as isolated summaries. A researcher is an independently configured research unit with its own inputs, process state, knowledge base, quality gates, and outputs. One computer may host multiple researchers for different domains or projects.
+
+Convert each researcher's mapped source libraries into structured, reusable knowledge through four internal layers:
 
 1. Source refinement
 2. Topic synthesis
 3. Reusable assets
 4. Concrete outputs
+
+Keep each researcher's knowledge inputs, active process state, and formal outputs isolated by default. Research skills, evaluation rubrics, extraction methods, templates, and verified workflows may be shared across researchers as reusable method assets, but domain evidence and conclusions must not silently leak from one researcher into another.
 
 Keep universal methodology separate from the user's implementation mapping.
 
@@ -26,6 +30,7 @@ Classify the user request before acting:
 
 | Request type | Primary action |
 |---|---|
+| "Create/init a researcher", "multiple researchers", "researcher for topic X" | Read `references/researcher-system.md` and `references/setup-and-config.md`; create or map one isolated researcher workspace with its own config, inputs, process state, and outputs. |
 | "Set this up", "from scratch", "create my system" | Read `references/setup-and-config.md`, create mapping/config and base directories. |
 | "Process unread/new sources" | Read `references/pipeline.md`; prepare and claim a bounded batch, generate refinements, submit, and commit them. |
 | "Can I output now?", "make a complete loop" | Read `references/promotion-control-and-resume.md`; select a supported topic, confirm the approved scope if high-cost generation is needed, then create topic page plus at least one output artifact. |
@@ -50,6 +55,7 @@ This skill is designed to work as a single installed package. A normal installat
 The package should remain usable beyond Codex. Codex reads `SKILL.md` as the native entrypoint; other agent platforms may use this package as an instruction bundle plus deterministic local scripts. Keep platform-specific behavior isolated in adapters or installation notes, not in the universal workflow model.
 
 - Use `references/reading-and-refinement.md` whenever reading, refining, synthesizing, or outputting from books, ebooks, public-account articles, webpages, newsletters, Markdown, PDF, EPUB, DOCX, HTML, TXT, or copied article text.
+- Use `references/researcher-system.md` whenever initializing, naming, auditing, or coordinating multiple independent researchers; deciding what can be shared between researchers; or separating a researcher's domain memory from shared research methods.
 - Use `references/source-intake-and-extraction.md` whenever system-found evidence, PDFs, OCR-prone files, unsupported formats, extraction failures, garbled text, or uncertain source readability may affect whether a source can enter source refinements.
 - Use `references/source-quality-and-weighting.md` whenever judging source type, source credibility, freshness, evidence strength, or weighted promotion from source refinements into 20/30/40 artifacts.
 - Use `references/evidence-gap-and-bounded-fill.md` whenever a topic page, asset, or output lacks enough authoritative, fresh, diverse, or primary evidence and needs bounded evidence filling rather than open-ended research.
@@ -66,7 +72,38 @@ The package should remain usable beyond Codex. Codex reads `SKILL.md` as the nat
 
 ## Default Directory Model
 
-Use universal names in method explanations:
+Use universal names in method explanations. For a single researcher:
+
+```text
+researcher-workspace/
+├── sources/
+└── knowledge-base/
+    ├── 00-system/
+    ├── 10-source-refinements/
+    ├── 20-topic-pages/
+    │   ├── pages/
+    │   └── moc/
+    ├── 30-reusable-assets/
+    └── 40-outputs/
+```
+
+For multiple researchers on one computer, use a shared installation of this skill and isolated researcher workspaces:
+
+```text
+researchers/
+├── shared-methods/
+│   ├── research-rubrics/
+│   ├── source-extraction-methods/
+│   └── output-templates/
+├── researcher-a/
+│   ├── sources/
+│   └── knowledge-base/
+└── researcher-b/
+    ├── sources/
+    └── knowledge-base/
+```
+
+Inside each `knowledge-base/`, keep the four-layer model:
 
 ```text
 knowledge-base/
@@ -79,7 +116,7 @@ knowledge-base/
 └── 40-outputs/
 ```
 
-Map these to the user's implementation. For an 8XX-style numeric folder system, use `examples/profiles/8xx/profile.md` only when the user explicitly selects or already has that profile.
+Map these to the user's implementation. A current personal knowledge base is one researcher instance, not the universal model itself. For an 8XX-style numeric folder system, use `examples/profiles/8xx/profile.md` only when the user explicitly selects or already has that profile.
 
 When writing public-facing outputs, use universal names. When writing implementation plans or operating the user's local system, use mapped paths.
 
@@ -315,6 +352,7 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `sync-relations --config <config>`: scan all source refinements, group by `theme_cluster`, and update each file's `related_sources` field with wikilinks to up to 5 peer refinements in the same cluster. Run after any batch commit.
 - `quality-gate`: combine relation, portability, topic-page, asset, output-quality, and verification checks into one pass/fail result; use `--strict` to fail on blockers.
 - `package-lint`: inspect the skill package itself for release-blocking portability and packaging issues.
+- `architecture_check.py`: enforce complexity ratchets, legacy CLI compatibility, and declared script dependencies during modularization.
 - `verification-queue`: scan processed notes, topic pages, and outputs for high-risk claims and write a verification queue. Verification results auto-detect stale items: if the source file's modification time is newer than the verification timestamp, the item is marked `stale`.
 - `verify-claim`: append a verification result for a queued claim or file into the verification result ledger.
 - `verification-status`: merge the current queue with the result ledger and report pending, verified, rejected, and unresolved output items.
@@ -323,6 +361,7 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `record-output-review`: append a human or model review result for an output artifact; `needs_revision` and `rejected` become quality-gate blockers.
 - `run`: execute all safe deterministic maintenance stages and report the next cognitive action; use `--apply` to write reports.
 - `kb_pipeline.py`: maintain the SQLite task ledger and run recoverable processing, storage inspection, legacy-to-local runtime migration, recoverable legacy retirement, and safe artifact cleanup. Keep runtime data device-local for new installations; preserve legacy behavior until an explicit verified migration. Cleanup and migration default to dry-run.
+- `kb_researcher.py`: initialize, register, list, select, show, and diagnose isolated researcher workspaces through a portable registry. Selection never creates shared process state.
 - `obsidian_linker.py`: add Obsidian frontmatter, stable tags, wikilinks, relation sections, and MOC pages for source refinements, topic pages, reusable assets, and outputs.
 
 ### System Files
@@ -388,7 +427,15 @@ Minimum config:
 
 ```json
 {
-  "name": "my-knowledge-base",
+  "name": "my-researcher",
+  "researcher": {
+    "id": "my-researcher",
+    "name": "My Researcher",
+    "domain": "research domain or project scope",
+    "role": "researcher",
+    "isolation": "independent_workspace",
+    "shared_methods": []
+  },
   "source_libraries": {
     "ebooks": "/absolute/path/to/ebooks",
     "public_accounts": "/absolute/path/to/public-account-library"
@@ -416,8 +463,10 @@ For an 8XX setup, prefer the example in `examples/profiles/8xx/profile.md`. Pers
 - `scripts/obsidian_linker.py`: normalize Obsidian metadata, tags, wikilinks, relation sections, and MOC pages for 10/20/30/40 files.
 - `scripts/ebook_probe.py`: extract text, metadata, chunks, and manifests from supported local books/articles.
 - `scripts/kb_pipeline.py`: run the recoverable, lease-based source-processing pipeline for large libraries.
+- `scripts/kb_researcher.py`: manage the researcher registry and isolated researcher initialization.
 - `scripts/official_account_library.rb`: audit, import, dedupe, and prune WeChat/公众号 Markdown libraries.
 - `references/setup-and-config.md`: portable setup and mapping rules.
+- `references/researcher-system.md`: multi-researcher positioning, isolation rules, shared-method boundaries, and researcher initialization contract.
 - `README.md`: Chinese user-facing introduction, installation guide, usage guide, quality boundary, and README maintenance policy.
 - `INSTALL.zh-CN.md`: Chinese install and verification guide for Codex, other agent platforms, and script-only use.
 - `LICENSE`, `CHANGELOG.md`, `SECURITY.md`: public distribution license, version history, and security/privacy boundary.

@@ -1,5 +1,5 @@
 # Architecture（架构手册）
-> 面向产出的研究型知识管理系统 — 业务架构与系统架构
+> 面向产出的研究型知识管理系统 — 当前结构、目标架构与渐进式迁移契约
 
 ---
 
@@ -14,9 +14,9 @@
 ### 用户工作流
 
 1. 新增来源到原文库（电子书 / 公众号 / 文章 / 网页）
-2. 运行管线：`pipeline.py discover → extract → claim → submit → commit`
+2. 运行管线：`kb_pipeline.py discover → extract → claim → submit → commit`
 3. Gate-10 检查精炼质量（结构完整性、内容 integrity、批次重复率）
-4. `manager.py promote` 做主题聚类与 5 维度评分
+4. `kb_manager.py promote` 做主题聚类与 5 维度评分
 5. 评分 ≥ 4 的簇创建主题页
 6. 提取可复用资产（方法、案例、表达、框架）
 7. 组装对外产出（费曼解释、文章草稿、方案材料）
@@ -33,6 +33,88 @@
 ---
 
 ## 二、系统架构
+
+### 当前结构判断
+
+当前版本具有清楚的业务价值流和文档分层，但代码仍是正在增长的单体：
+
+- `SKILL.md` 同时承担意图路由、流程说明、质量规则、命令手册和发布规范。
+- `scripts/kb_manager.py` 同时承担配置、持久化、审核、推广、治理、发布检查和 CLI 注册。
+- `scripts/kb_pipeline.py` 同时承担运行时存储、事务状态机、提取、质量门调用和迁移。
+- references 已按场景拆分，但尚未全部映射到稳定的代码能力模块。
+
+因此目标不是拆成微服务，而是把现有系统演进为一个有明确边界的模块化单体。
+
+### 目标模块
+
+| 模块 | 高内聚职责 | 不应负责 |
+|---|---|---|
+| Intake | 来源发现、格式识别、提取、可读性 | 主题推广、发布 |
+| Refinement | 阅读协议、精炼结构、Gate-10 | 来源扫描、生命周期治理 |
+| Synthesis | 聚类、推广、主题综合 | 文件系统细节、发布排版 |
+| Assets | 资产候选、资产生成、组合平衡 | 来源提取、运行时状态 |
+| Publication | 输出生成、编辑成熟度、发布交接 | 来源发现、数据库管理 |
+| Governance | 验证、生命周期、健康、质量门 | 具体内容生成 |
+| Platform | 配置、路径、持久化、备份、Obsidian适配 | 领域判断 |
+
+### 目标代码结构
+
+```text
+kbm/
+├── domain/          # 稳定记录、枚举和领域规则；不依赖外层
+├── application/     # Intake/Refinement/Synthesis/Assets/Publication/Governance 用例
+├── infrastructure/  # 文件、SQLite、配置、Obsidian 等适配器
+└── interfaces/cli/  # 参数解析和结果序列化
+
+scripts/             # 保留旧命令名称的兼容入口
+```
+
+依赖方向固定为：`interfaces → application → domain`，基础设施通过应用层定义的接口接入。领域层不得依赖 CLI、用户目录、Obsidian 或 SQLite。
+
+第一批公共内核已经落地：
+
+```text
+kbm/
+├── domain/researcher.py   # 研究员身份与隔离契约
+└── platform/
+    ├── config.py          # 配置默认值、加载与验证
+    ├── paths.py           # 研究员范围内的知识库、系统与运行时路径
+    └── storage.py         # 备份轮转与操作日志
+```
+
+v0.6 增加研究员控制面：`kbm/application/researcher_registry.py` 负责注册、选择、冲突检查和健康诊断，`scripts/kb_researcher.py` 只负责 CLI 编排。注册表不承载任何研究内容、运行任务或共享 SQLite 状态。
+
+v0.7 开始按职责抽离遗留管理单体。第一批将发布包扫描、README 新鲜度和发布哈希迁入 `kbm/application/package_release.py`，旧 `package-lint` CLI 保持兼容；`kb_manager.py` 的行数棘轮同步从 4275 下调到 4210，禁止迁出的代码重新回流。
+
+v0.7.1 将 Markdown 文件收集、frontmatter、二级章节、标题和 wikilink 解析迁入无工作区依赖的 `kbm/domain/markdown.py`。它是 Gate-10、关系治理和新来源适配器的共享领域基础；主脚本棘轮进一步下调到 4145 行。
+
+v0.7.2 将单篇来源精炼检查、批次模型文本重复检测和 Gate-10 报告渲染迁入 `kbm/application/refinement_quality.py`。旧 CLI 和 Pipeline 继续调用相同契约，主脚本棘轮降到 3835 行。
+
+v0.7.3 将规则加载、来源匹配、主题聚类、五维评分、晋升原因、候选资产判断和三类评审渲染迁入 `kbm/application/promotion.py`；便携文件名规则迁入 `kbm/domain/naming.py`。主脚本棘轮降到 3605 行。
+
+v0.7.4 将晋升决策账本、断点状态和安全 stub 迁入 `kbm/application/promotion_runtime.py`，并把共享时钟与 JSONL 持久化迁入 `kbm/platform`。主脚本棘轮降到 3350 行。
+
+v0.7.5 将来源渠道、证据模式、时效敏感度、A-D 权重、风险信号、验证队列和陈旧结果检测迁入 `kbm/application/source_verification.py`；共享日期解析迁入 platform。主脚本棘轮降到 2975 行。
+
+旧配置在内存中映射为隐式研究员，不强制迁移配置文件；新建配置写入显式研究员身份和运行命名空间。现有配置继续使用历史名称派生运行目录，避免数据库路径静默变化；新配置使用研究员 ID 作为命名空间。知识库路径身份始终参与计算，避免多个工作区共享 SQLite 或缓存。
+
+### 渐进式迁移原则
+
+1. 不重写现有系统，不改变已有 CLI 名称和 JSON 输出契约。
+2. 先建立特征测试和架构棘轮，再逐个抽离模块。
+3. 优先抽离配置、路径、原子写入、备份和标准记录等公共内核。
+4. 每完成一次抽离，就下调 `architecture-contract.json` 中对应单体的复杂度上限。
+5. 旧脚本最终只保留参数解析、兼容转换和应用用例调用。
+
+### 自动架构门禁
+
+`architecture-contract.json` 同时记录当前允许上限和目标值。当前上限是防止继续恶化的棘轮，不代表理想状态。
+
+```bash
+python3 scripts/architecture_check.py --strict
+```
+
+该检查阻断：入口文件继续越过复杂度预算、旧 CLI 命令意外消失、脚本间出现未经声明的新依赖。超过目标但尚未超过当前棘轮的项目以技术债警告呈现。
 
 ### 组件栈
 
@@ -136,3 +218,5 @@ Gate-10 的三大检查直接针对这三个问题：结构检查、内容完整
 | references/asset-output-matrix.md | 资产和输出触发矩阵及质量标准 |
 | references/verification.md | 高风险事实验证工作流 |
 | CHANGELOG.md | 版本变更记录 |
+| architecture-contract.json | 可执行的架构预算、CLI兼容契约、依赖白名单和目标模块 |
+| scripts/architecture_check.py | 架构棘轮检查入口 |

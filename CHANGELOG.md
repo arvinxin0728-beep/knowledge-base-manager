@@ -4,6 +4,147 @@ All notable changes to this project should be recorded here.
 
 The format follows Keep a Changelog conventions loosely, and this project uses semantic versioning while it is distributed publicly.
 
+## [Unreleased]
+
+## [0.7.7] - 2026-08-09
+
+### Added
+
+- Shared source-inventory reconciliation for audit and transactional pipeline bootstrap.
+- Unique refinement lookup across source-directory moves, dated refinement renames, and Unicode punctuation changes.
+- Regression coverage for stale temporary outputs, ambiguous matches, and legacy renamed refinements.
+
+### Changed
+
+- `audit` now reports verified processed sources only when an index record and a durable refinement can be reconciled.
+- New local ledgers import existing durable refinements as committed instead of rediscovering them as model work.
+
+### Fixed
+
+- Stale output paths no longer hide genuinely unrefined sources or cause already refined sources to be processed twice.
+- Paths outside the mapped source-refinement layer, including `/private/tmp` staging files, are not accepted as durable outputs.
+
+## [0.7.6] - 2026-08-09
+
+### Added
+
+- Source-channel classification basis and confidence, with metadata-first aliases and conservative unknown fallback.
+- Verification-ledger reconciliation for physical rows, superseded results, orphaned results, stale results, and parse errors.
+- Ten-case deterministic golden refinement regression covering required-claim preservation and forbidden-claim detection.
+
+### Changed
+
+- The default regression runner now includes the portable new-user end-to-end lifecycle.
+- Video researcher initialization creates only video-profile input and refinement directories.
+
+### Fixed
+
+- Ambiguous words such as “研究” and “报告” no longer grant report-level authority without explicit provenance.
+- Stale verification items are counted once and latest result dictionaries are no longer mutated during status rendering.
+
+## [0.7.5] - 2026-08-09
+
+### Added
+
+- Source-quality and verification module covering evidence channels, authority, freshness, bias, A-D tiers, risk signals, verification ledgers, and stale-result detection.
+- Shared platform date parser and regression tests for primary-versus-marketing weighting and stale verification.
+
+### Changed
+
+- Existing source-quality and verification CLI commands retain their contracts while delegating to the governance module.
+- `kb_manager.py` decreased from 3347 to 2974 lines; its line ratchet decreased to 2975.
+
+### Fixed
+
+- Quantified, ranking, report-year, and forecast regexes preserve their original digit/whitespace semantics after module extraction.
+
+## [0.7.4] - 2026-08-09
+
+### Added
+
+- Promotion runtime module for idempotent decision ledgers, resumable checkpoints, and system-scoped deterministic stubs.
+- Shared platform clock and JSONL persistence primitives.
+- Regression tests for ledger idempotency, parse-error reporting, checkpoint state, and formal-layer write isolation.
+
+### Changed
+
+- Promotion write behavior remains behind the existing `--apply` and `--create-stubs` boundaries while delegating to the runtime module.
+- `kb_manager.py` decreased from 3601 to 3347 lines; its line ratchet decreased to 3350.
+
+## [0.7.3] - 2026-08-09
+
+### Added
+
+- Dedicated promotion module for cluster rules, source matching, five-dimension scoring, non-promotion reasons, artifact candidates, and review rendering.
+- Portable naming domain primitive and promotion-module feature tests.
+
+### Changed
+
+- Existing `promote` and `run` commands retain their output contracts while delegating topic decisions to the extracted module.
+- `kb_manager.py` decreased from 3833 to 3601 lines; its line ratchet decreased to 3605.
+
+### Fixed
+
+- Portable cluster-rule lookup now resolves from the skill root after moving code from `scripts/` into `kbm/application/`.
+
+## [0.7.2] - 2026-08-09
+
+### Added
+
+- Dedicated refinement-quality application module covering per-file blockers, warnings, batch repetition detection, and Gate-10 report rendering.
+- Direct feature tests for valid refinements, placeholder rejection, and repeated-model batch blocking.
+
+### Changed
+
+- Existing `gate-10`, `check-refinement`, `run`, pipeline submit, and pipeline adopt workflows retain their CLI contracts while consuming the extracted module.
+- `kb_manager.py` decreased from 4141 to 3833 lines; its line ratchet decreased to 3835.
+
+## [0.7.1] - 2026-08-09
+
+### Added
+
+- Shared `kbm.domain.markdown` primitives for frontmatter, section, title, wikilink, and recursive Markdown-file parsing.
+- Contract tests for Markdown parsing and deterministic recursive collection.
+
+### Changed
+
+- Gate-10 and governance callers now consume the shared Markdown domain primitives through compatibility imports.
+- `kb_manager.py` decreased from 4207 to 4141 lines; its line ratchet decreased to 4145.
+
+## [0.7.0] - 2026-08-09
+
+### Added
+
+- Application-scoped release package validator for required files, README freshness, portable fixtures, and source hash refresh.
+- Independent regression coverage for release validation and stale-hash detection.
+
+### Changed
+
+- Legacy `package-lint` remains CLI-compatible but delegates to `kbm/application/package_release.py`.
+- `kb_manager.py` decreased from 4271 to 4207 lines and its architecture ratchet decreased to 4210 lines.
+
+## [0.6.0] - 2026-08-09
+
+### Added
+
+- Executable `architecture-contract.json` defining modular-monolith boundaries, current complexity ratchets, target sizes, legacy CLI contracts, and allowed script dependencies.
+- `scripts/architecture_check.py --strict` and `tests/test_architecture.py` to prevent further monolith growth or accidental CLI contract loss before decomposition.
+- Target module ownership for Intake, Refinement, Synthesis, Assets, Publication, Governance, and Platform.
+- `kbm/domain/researcher.py` with an explicit researcher identity and isolation contract.
+- Shared `kbm/platform` modules for configuration, researcher-scoped paths, runtime isolation, backups, and operation logs.
+- Multi-researcher regression tests proving independent SQLite ledgers, source discovery state, and system-file paths.
+- `kb_researcher.py` commands for registry initialization, researcher registration, selection, inspection, diagnosis, and profile-driven workspace initialization.
+- Dependency-free regression runner with researcher registry, duplicate identity, shared-workspace rejection, and video-profile tests.
+- Video researcher profile with device-local runtime, video-only source mapping, derived-media directories, and an explicit disabled adapter state until ingestion is implemented.
+
+### Changed
+
+- `ARCHITECTURE.md` now distinguishes the current monolith from the target module architecture and defines a strangler-style migration sequence.
+- Release checks now include the architecture gate.
+- `kb_manager.py` and `kb_pipeline.py` now consume the shared platform core while preserving their existing CLI commands.
+- Legacy configs are mapped to an implicit researcher without rewriting the config file; new `init` runs write an explicit researcher object.
+- Researcher selection is stored only in the registry; knowledge, active state, SQLite ledgers, and caches remain researcher-local.
+
 ## [0.1.3] - 2026-07-27
 
 ### Added
