@@ -28,26 +28,46 @@ HIGH_RISK_PATTERNS = {
     "forecast": r"预测|预计|未来\d+年",
 }
 
-def _infer_source_channel(meta: dict[str, Any], path: Path, text: str) -> str:
-    raw_type = str(meta.get("source_type") or "").lower()
+SOURCE_CHANNEL_ALIASES = {
+    "ebook": "book", "book": "book",
+    "paper": "paper", "academic_paper": "paper",
+    "official_doc": "official_doc", "official_document": "official_doc",
+    "report": "report", "research_report": "report", "industry_report": "report",
+    "public_account_article": "public_account", "public_account": "public_account", "wechat": "public_account",
+    "tool_doc": "tool_doc", "documentation": "tool_doc",
+    "web_article": "web_article", "article": "web_article", "web": "web_article",
+}
+
+
+def _source_channel_evidence(meta: dict[str, Any], path: Path, text: str) -> tuple[str, str, str]:
+    """Classify conservatively: explicit provenance beats path cues; ambiguity stays unknown."""
+    raw_type = str(meta.get("source_channel") or meta.get("source_type") or "").strip().lower()
     source_file = str(meta.get("source_file") or "")
     url = str(meta.get("url") or "").lower()
     name = f"{path.name} {source_file}".lower()
-    if raw_type in {"ebook", "book"} or "电子书" in path.parts or any(x in source_file.lower() for x in [".epub", ".pdf"]):
-        return "book"
+    explicit = SOURCE_CHANNEL_ALIASES.get(raw_type)
+    if explicit:
+        return explicit, "metadata", "high"
+    normalized_parts = {part.lower().replace("-", "_") for part in path.parts}
+    if "电子书" in path.parts or {"ebooks", "books"} & normalized_parts or Path(source_file).suffix.lower() in {".epub", ".mobi", ".azw3"}:
+        return "book", "path_or_extension", "medium"
     if "paper" in raw_type or "arxiv" in url or "doi.org" in url or "论文" in name:
-        return "paper"
-    if any(x in url for x in [".gov", "gov.cn", "stats.gov", "sec.gov"]) or ("非官方" not in name and any(x in name for x in ["官方", "标准", "白皮书"])):
-        return "official_doc"
-    if any(x in name for x in ["报告", "研究", "白皮书", "财报"]):
-        return "report"
-    if raw_type in {"public_account_article", "wechat", "public_account"} or "公众号" in path.parts:
-        return "public_account"
+        return "paper", "url_or_path", "medium"
+    if "公众号" in path.parts or {"public_accounts", "public_account", "wechat"} & normalized_parts:
+        return "public_account", "path", "medium"
+    if any(x in url for x in [".gov", "gov.cn", "stats.gov", "sec.gov"]):
+        return "official_doc", "official_url", "high"
+    if "非官方" not in name and any(x in name for x in ["官方文件", "国家标准", "行业标准"]):
+        return "official_doc", "specific_name_cue", "medium"
     if any(x in name for x in ["教程", "指南", "插件", "安装", "配置", "手把手"]):
-        return "tool_doc"
-    if raw_type in {"web_article", "article", "web"}:
-        return "web_article"
-    return "unknown"
+        return "tool_doc", "name_cue", "low"
+    # Generic words such as “研究” and “报告” can describe an article topic. They
+    # are deliberately insufficient to grant report-level authority.
+    return "unknown", "insufficient_provenance", "low"
+
+
+def _infer_source_channel(meta: dict[str, Any], path: Path, text: str) -> str:
+    return _source_channel_evidence(meta, path, text)[0]
 
 
 def _infer_source_entity_type(meta: dict[str, Any], path: Path, text: str) -> str:
@@ -113,7 +133,7 @@ def _source_freshness_score(meta: dict[str, Any], channel: str, sensitivity: str
 
 
 def classify_source_quality(meta: dict[str, Any], path: Path, text: str) -> dict[str, Any]:
-    channel = _infer_source_channel(meta, path, text)
+    channel, channel_basis, channel_confidence = _source_channel_evidence(meta, path, text)
     entity = _infer_source_entity_type(meta, path, text)
     mode = _infer_evidence_mode(channel, path, text)
     sensitivity = _source_time_sensitivity(channel, mode, text)
@@ -169,6 +189,8 @@ def classify_source_quality(meta: dict[str, Any], path: Path, text: str) -> dict
         flags.append("use_as_scene_or_lead_not_core_evidence")
     return {
         "source_channel": channel,
+        "source_channel_basis": channel_basis,
+        "source_channel_confidence": channel_confidence,
         "source_entity_type": entity,
         "source_evidence_mode": mode,
         "source_time_sensitivity": sensitivity,
@@ -345,23 +367,32 @@ def verification_status(cfg: dict[str, Any]) -> dict[str, Any]:
                 stale_results.add(vid)
     merged = []
     counts: Counter[str] = Counter()
+    queue_ids = {item["id"] for item in queue}
     for item in queue:
         resolved = latest.get(item["id"])
         if resolved and item["id"] in stale_results:
-            resolved["status"] = "stale"
-            counts["stale"] += 1
+            resolved = {**resolved, "status": "stale"}
         if resolved:
             merged_item = {**item, "status": resolved.get("status", "pending"), "verification": resolved}
         else:
             merged_item = item
         counts[str(merged_item.get("status", "pending"))] += 1
         merged.append(merged_item)
+    result_rows, result_parse_errors = read_index_objects(system_file(cfg, "verification-results.jsonl"))
+    orphaned_result_ids = sorted(set(latest) - queue_ids)
     return {
         "items": merged,
         "counts": dict(counts),
+        "current_item_count": len(queue),
         "pending_count": sum(1 for item in merged if item.get("status") == "pending"),
         "unresolved_output_count": sum(1 for item in merged if item.get("status") == "pending" and str(item.get("file", "")).startswith(cfg["mapping"]["outputs"] + "/")),
         "result_rows": len(latest),
+        "ledger_row_count": len(result_rows),
+        "superseded_result_count": max(0, len(result_rows) - len(latest)),
+        "orphaned_result_count": len(orphaned_result_ids),
+        "orphaned_result_ids": orphaned_result_ids,
+        "stale_count": counts.get("stale", 0),
+        "result_parse_error_count": len(result_parse_errors),
     }
 
 
@@ -380,6 +411,11 @@ def render_verification_status(result: dict[str, Any]) -> str:
         f"- pending_count: {result['pending_count']}",
         f"- unresolved_output_count: {result['unresolved_output_count']}",
         f"- result_rows: {result['result_rows']}",
+        f"- ledger_row_count: {result['ledger_row_count']}",
+        f"- superseded_result_count: {result['superseded_result_count']}",
+        f"- orphaned_result_count: {result['orphaned_result_count']}",
+        f"- stale_count: {result['stale_count']}",
+        f"- result_parse_error_count: {result['result_parse_error_count']}",
     ]
     for key, value in sorted(result["counts"].items()):
         lines.append(f"- {key}: {value}")

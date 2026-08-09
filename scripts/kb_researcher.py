@@ -85,6 +85,19 @@ def cmd_init(args: argparse.Namespace) -> None:
     if config.exists():
         raise ValueError("researcher_config_already_exists")
     source_root = workspace / ("01-视频输入" if args.profile == "video" else "01-知识输入")
+    video_profile_args = []
+    if args.profile == "video":
+        video_profile_args = [
+            "--ebooks-subdir", "视频", "--articles-subdir", "视频", "--public-accounts-subdir", "视频",
+            "--topic-pages-subdir", "主题页", "--moc-subdir", "MOC",
+            "--methods-subdir", "方法", "--cases-subdir", "案例", "--expressions-subdir", "表达", "--frameworks-subdir", "框架",
+            "--feynman-subdir", "费曼解释", "--article-drafts-subdir", "文章草稿",
+            "--solution-materials-subdir", "方案材料", "--reviews-subdir", "复盘",
+        ]
+    source_args = (
+        ["--ebooks", str(source_root / "电子书"), "--articles", str(source_root / "文章"), "--public-accounts", str(source_root / "公众号")]
+        if args.profile == "knowledge" else []
+    )
     command = [
         sys.executable, str(ROOT / "scripts" / "kb_manager.py"), "init",
         "--config", str(config), "--ai-knowledge-base", str(workspace),
@@ -92,8 +105,8 @@ def cmd_init(args: argparse.Namespace) -> None:
         "--researcher-name", args.name, "--research-domain", args.domain,
         "--system-dir", args.system_dir, "--source-refinements-dir", "10-来源精炼",
         "--topic-pages-dir", "20-主题页", "--reusable-assets-dir", "30-可复用资产",
-        "--outputs-dir", "40-输出", "--ebooks", str(source_root / "电子书"),
-        "--articles", str(source_root / "文章"), "--public-accounts", str(source_root / "公众号"),
+        "--outputs-dir", "40-输出",
+        *source_args, *video_profile_args,
     ]
     if args.apply:
         command.append("--apply")

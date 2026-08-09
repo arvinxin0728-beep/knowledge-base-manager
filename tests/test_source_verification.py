@@ -38,6 +38,21 @@ def test_source_weighting_separates_primary_and_marketing_evidence() -> None:
     assert {"ranking", "forecast", "quantified_improvement"} <= set(signals)
 
 
+def test_source_channel_uses_provenance_before_ambiguous_title_words() -> None:
+    public = classify_source_quality(
+        {"source_type": "public_account_article"},
+        Path("公众号/AI行业研究报告解读.md"),
+        "这是一篇对研究报告的解读文章。",
+    )
+    assert public["source_channel"] == "public_account"
+    assert public["source_channel_basis"] == "metadata"
+    ambiguous = classify_source_quality({}, Path("AI研究方法.md"), "研究如何改进工作流。")
+    assert ambiguous["source_channel"] == "unknown"
+    assert ambiguous["source_channel_confidence"] == "low"
+    report = classify_source_quality({"source_type": "research_report"}, Path("市场观察.md"), "报告正文")
+    assert report["source_channel"] == "report"
+
+
 def test_verification_result_becomes_stale_after_source_rewrite() -> None:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
@@ -51,9 +66,31 @@ def test_verification_result_becomes_stale_after_source_rewrite() -> None:
         result = verification_status(cfg)
         assert result["items"][0]["status"] == "stale"
         assert result["pending_count"] == 0
+        assert result["counts"] == {"stale": 1}
+        assert result["stale_count"] == 1
+
+
+def test_verification_status_reconciles_superseded_and_orphaned_results() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        cfg = config(root)
+        source = root / "10-来源精炼" / "claim.md"
+        source.write_text("数据显示市场增长率提升 50%", encoding="utf-8")
+        item = verification_items(cfg)[0]
+        for status in ("pending", "verified"):
+            append_verification_result(cfg, {"schema_version": 1, "id": item["id"], "status": status, "verified_at": "2999-01-01T00:00:00"})
+        append_verification_result(cfg, {"schema_version": 1, "id": "orphaned", "status": "verified", "verified_at": "2999-01-01T00:00:00"})
+        result = verification_status(cfg)
+        assert result["ledger_row_count"] == 3
+        assert result["result_rows"] == 2
+        assert result["superseded_result_count"] == 1
+        assert result["orphaned_result_count"] == 1
+        assert result["orphaned_result_ids"] == ["orphaned"]
 
 
 if __name__ == "__main__":
     test_source_weighting_separates_primary_and_marketing_evidence()
+    test_source_channel_uses_provenance_before_ambiguous_title_words()
     test_verification_result_becomes_stale_after_source_rewrite()
+    test_verification_status_reconciles_superseded_and_orphaned_results()
     print("ok")

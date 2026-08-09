@@ -6,6 +6,24 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-08-09
+
+### Added
+
+- Source-channel classification basis and confidence, with metadata-first aliases and conservative unknown fallback.
+- Verification-ledger reconciliation for physical rows, superseded results, orphaned results, stale results, and parse errors.
+- Ten-case deterministic golden refinement regression covering required-claim preservation and forbidden-claim detection.
+
+### Changed
+
+- The default regression runner now includes the portable new-user end-to-end lifecycle.
+- Video researcher initialization creates only video-profile input and refinement directories.
+
+### Fixed
+
+- Ambiguous words such as “研究” and “报告” no longer grant report-level authority without explicit provenance.
+- Stale verification items are counted once and latest result dictionaries are no longer mutated during status rendering.
+
 ## [0.7.5] - 2026-08-09
 
 ### Added

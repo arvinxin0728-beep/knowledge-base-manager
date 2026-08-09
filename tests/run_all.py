@@ -29,10 +29,22 @@ def main() -> None:
             try:
                 function()
                 passed += 1
-            except Exception:
+            except (Exception, SystemExit):
                 failed += 1
                 print(f"FAILED {path.name}::{name}", file=sys.stderr)
                 traceback.print_exc()
+    e2e_path = TESTS / "e2e_new_user.py"
+    spec = importlib.util.spec_from_file_location(e2e_path.stem, e2e_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        module.test_new_user_portable_lifecycle()
+        passed += 1
+    except BaseException:
+        failed += 1
+        print("FAILED e2e_new_user.py::test_new_user_portable_lifecycle", file=sys.stderr)
+        traceback.print_exc()
     print(f"passed={passed} failed={failed}")
     if failed:
         raise SystemExit(1)

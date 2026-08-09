@@ -42,6 +42,10 @@ def test_registry_init_register_select_and_doctor() -> None:
             assert video_cfg["mapping"]["media_assets"] == "50-素材库"
             assert video_cfg["source_refinement_subdirs"] == {"videos": "视频"}
             assert (root / "video-researcher" / "50-素材库" / "关键帧").is_dir()
+            for unwanted in ("电子书", "文章", "公众号"):
+                assert not (root / "video-researcher" / "01-视频输入" / unwanted).exists()
+            for unwanted in ("ebooks", "articles", "public-accounts"):
+                assert not (root / "video-researcher" / "10-来源精炼" / unwanted).exists()
         finally:
             if previous is None:
                 os.environ.pop("KBM_RUNTIME_ROOT", None)
