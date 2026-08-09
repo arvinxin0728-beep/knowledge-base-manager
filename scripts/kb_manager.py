@@ -50,6 +50,7 @@ from kbm.application.source_verification import (
     render_verification_status, risk_signals, source_quality_audit,
     verification_items, verification_result_row, verification_status,
 )
+from kbm.application.source_inventory import audit_sources
 from kbm.platform.config import (
     DEFAULT_MAPPING, DEFAULT_OUTPUT_SUBDIRS, DEFAULT_REUSABLE_ASSET_SUBDIRS,
     DEFAULT_SOURCE_SUBDIRS, DEFAULT_TOPIC_PAGE_SUBDIRS, config_defaults,
@@ -413,24 +414,7 @@ def iter_sources(cfg: dict[str, Any]) -> list[Path]:
 
 
 def audit(cfg: dict[str, Any], include_hashes: bool = False) -> dict[str, Any]:
-    processed_paths, processed_hashes, processed_count = read_processed(cfg)
-    sources = iter_sources(cfg)
-    unprocessed = []
-    for p in sources:
-        processed = str(p) in processed_paths
-        sha = None
-        if include_hashes:
-            sha = file_sha256(p)
-            processed = processed or sha in processed_hashes
-        if not processed:
-            unprocessed.append({"path": str(p), "sha256": sha})
-    return {
-        "ai_knowledge_base": cfg.get("ai_knowledge_base"),
-        "source_count": len(sources),
-        "processed_index_count": processed_count,
-        "unprocessed_count": len(unprocessed),
-        "unprocessed": unprocessed,
-    }
+    return audit_sources(cfg, include_hashes=include_hashes)
 
 
 

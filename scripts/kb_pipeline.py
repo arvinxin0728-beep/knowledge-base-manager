@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_probe import candidate_chapters, chunk_text, extract
 from kbm.platform.config import load_config
+from kbm.application.source_inventory import RefinementCatalog
 from kbm.platform.paths import (
     db_path, legacy_runtime_dir, local_runtime_dir, runtime_dir,
     system_active_file, system_dir,
@@ -286,6 +287,7 @@ def reconcile_processed_index(cfg: dict[str, Any], db: sqlite3.Connection) -> in
             records_by_hash.setdefault(recorded_sha, []).append(record)
     reconciled = 0
     index_changed = False
+    refinements = RefinementCatalog(cfg)
     for row in db.execute("SELECT * FROM jobs WHERE state!='committed'").fetchall():
         source_sha = None
         record = records_by_path.get(row["source_path"])
@@ -301,9 +303,11 @@ def reconcile_processed_index(cfg: dict[str, Any], db: sqlite3.Connection) -> in
             source_sha = source_sha or sha256_file(Path(row["source_path"]))
         if recorded_sha and source_sha != recorded_sha:
             continue
-        output_value = record.get("output_file") or record.get("refinement_file")
-        output = Path(output_value).expanduser() if output_value else refinement_destination(cfg, row)
-        if not output.is_file():
+        output = refinements.resolve(Path(row["source_path"]), record)
+        if output is None and not (record.get("output_file") or record.get("refinement_file")):
+            legacy_destination = refinement_destination(cfg, row)
+            output = legacy_destination if legacy_destination.is_file() else None
+        if output is None:
             continue
         canonical_output = str(output.resolve())
         canonical_sha = recorded_sha or source_sha or sha256_file(Path(row["source_path"]))

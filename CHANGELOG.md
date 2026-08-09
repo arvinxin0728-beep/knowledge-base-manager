@@ -6,6 +6,24 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-08-09
+
+### Added
+
+- Shared source-inventory reconciliation for audit and transactional pipeline bootstrap.
+- Unique refinement lookup across source-directory moves, dated refinement renames, and Unicode punctuation changes.
+- Regression coverage for stale temporary outputs, ambiguous matches, and legacy renamed refinements.
+
+### Changed
+
+- `audit` now reports verified processed sources only when an index record and a durable refinement can be reconciled.
+- New local ledgers import existing durable refinements as committed instead of rediscovering them as model work.
+
+### Fixed
+
+- Stale output paths no longer hide genuinely unrefined sources or cause already refined sources to be processed twice.
+- Paths outside the mapped source-refinement layer, including `/private/tmp` staging files, are not accepted as durable outputs.
+
 ## [0.7.6] - 2026-08-09
 
 ### Added
