@@ -51,6 +51,12 @@ from kbm.application.source_verification import (
     verification_items, verification_result_row, verification_status,
 )
 from kbm.application.source_inventory import audit_sources
+from kbm.application.evidence_intake import (
+    evidence_intake_audit, evidence_intake_expected_dirs, evidence_intake_root,
+    init_evidence_intake as _init_evidence_intake,
+    render_evidence_intake_audit, render_source_capabilities,
+    system_evidence_refinement_root,
+)
 from kbm.platform.config import (
     DEFAULT_MAPPING, DEFAULT_OUTPUT_SUBDIRS, DEFAULT_REUSABLE_ASSET_SUBDIRS,
     DEFAULT_SOURCE_SUBDIRS, DEFAULT_TOPIC_PAGE_SUBDIRS, config_defaults,
@@ -178,159 +184,8 @@ def ensure_tree(cfg: dict[str, Any]) -> None:
     ensure_system_files(cfg)
 
 
-def evidence_intake_root(cfg: dict[str, Any]) -> Path:
-    return kb_path(cfg, "system") / "evidence-intake"
-
-
-def system_evidence_refinement_root(cfg: dict[str, Any]) -> Path:
-    subdir = cfg.get("source_refinement_subdirs", {}).get("system_evidence_fill", "系统补证")
-    return kb_path(cfg, "source_refinements") / subdir
-
-
-def evidence_intake_expected_dirs(cfg: dict[str, Any]) -> dict[str, list[Path]]:
-    intake = evidence_intake_root(cfg)
-    fill = system_evidence_refinement_root(cfg)
-    return {
-        "system_intake": [
-            intake / "candidates",
-            intake / "extracted",
-            intake / "needs-ocr",
-            intake / "needs-manual-review",
-            intake / "rejected",
-        ],
-        "system_evidence_refinements": [
-            fill,
-            fill / "官方文档",
-            fill / "研究论文",
-            fill / "行业报告",
-            fill / "案例材料",
-            fill / "临时事实核查",
-            fill / "待人工确认",
-        ],
-    }
-
-
 def init_evidence_intake(cfg: dict[str, Any], apply: bool = False) -> dict[str, Any]:
-    ensure_system_files(cfg)
-    expected = evidence_intake_expected_dirs(cfg)
-    created = []
-    existing = []
-    for group, paths in expected.items():
-        for path in paths:
-            if path.exists():
-                existing.append({"group": group, "path": str(path)})
-                continue
-            created.append({"group": group, "path": str(path)})
-            if apply:
-                path.mkdir(parents=True, exist_ok=True)
-    ledger = system_file(cfg, "evidence-fill-ledger.jsonl")
-    if apply and not ledger.exists():
-        ledger.write_text("", encoding="utf-8")
-    return {
-        "apply": apply,
-        "created_count": len(created),
-        "existing_count": len(existing),
-        "created": created,
-        "existing": existing,
-        "ledger": str(ledger),
-        "system_evidence_refinement_root": str(system_evidence_refinement_root(cfg)),
-    }
-
-
-def evidence_intake_audit(cfg: dict[str, Any]) -> dict[str, Any]:
-    expected = evidence_intake_expected_dirs(cfg)
-    missing = []
-    present = []
-    for group, paths in expected.items():
-        for path in paths:
-            item = {"group": group, "path": str(path)}
-            if path.exists() and path.is_dir():
-                present.append(item)
-            else:
-                missing.append(item)
-    ledger = system_file(cfg, "evidence-fill-ledger.jsonl")
-    ledger_ok = ledger.exists()
-    if not ledger_ok:
-        missing.append({"group": "active_ledger", "path": str(ledger)})
-    return {
-        "passed": not missing,
-        "missing_count": len(missing),
-        "present_count": len(present),
-        "ledger": str(ledger),
-        "ledger_exists": ledger_ok,
-        "system_evidence_refinement_root": str(system_evidence_refinement_root(cfg)),
-        "missing": missing,
-        "present": present,
-    }
-
-
-def render_evidence_intake_audit(result: dict[str, Any]) -> str:
-    lines = [
-        "# Evidence Intake Audit",
-        "",
-        "---",
-        f"updated_at: {date.today().isoformat()}",
-        "stage: system",
-        f"status: {'passed' if result['passed'] else 'missing'}",
-        "---",
-        "",
-        "## Summary",
-        "",
-        f"- passed: {str(result['passed']).lower()}",
-        f"- missing_count: {result['missing_count']}",
-        f"- present_count: {result['present_count']}",
-        f"- ledger_exists: {str(result['ledger_exists']).lower()}",
-        f"- ledger: `{result['ledger']}`",
-        f"- system_evidence_refinement_root: `{result['system_evidence_refinement_root']}`",
-        "",
-        "## Missing",
-        "",
-    ]
-    if not result["missing"]:
-        lines.append("- None.")
-    for item in result["missing"]:
-        lines.append(f"- {item['group']}: `{item['path']}`")
-    lines += ["", "## Present", ""]
-    if not result["present"]:
-        lines.append("- None.")
-    for item in result["present"]:
-        lines.append(f"- {item['group']}: `{item['path']}`")
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def render_source_capabilities(cfg: dict[str, Any], intake: dict[str, Any]) -> str:
-    lines = [
-        "# Source Capabilities",
-        "",
-        "---",
-        f"updated_at: {date.today().isoformat()}",
-        "stage: system",
-        "status: active",
-        "---",
-        "",
-        "## Intake Boundary",
-        "",
-        "- Unreadable, garbled, unsupported, or permission-uncertain sources must not enter source refinements.",
-        "- System-found evidence must be isolated in evidence-intake first.",
-        "- Durable system-found evidence may enter the source-refinement layer only under the separate system evidence fill directory.",
-        "- Fact-check-only evidence stays in the ledger unless deliberately promoted.",
-        "",
-        "## Extraction Quality States",
-        "",
-        "- extract_ok",
-        "- extract_needs_cleanup",
-        "- ocr_required",
-        "- layout_complex",
-        "- mojibake_failed",
-        "- manual_review_required",
-        "- unsupported_source",
-        "",
-        "## Current Skeleton",
-        "",
-        f"- evidence_intake_audit_passed: {str(intake['passed']).lower()}",
-        f"- system_evidence_refinement_root: `{intake['system_evidence_refinement_root']}`",
-    ]
-    return "\n".join(lines).rstrip() + "\n"
+    return _init_evidence_intake(cfg, apply=apply, prepare_system=ensure_system_files)
 
 
 def file_sha256(path: Path) -> str:
