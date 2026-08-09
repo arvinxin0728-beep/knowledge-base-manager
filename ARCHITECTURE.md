@@ -84,6 +84,8 @@ kbm/
 
 v0.6 增加研究员控制面：`kbm/application/researcher_registry.py` 负责注册、选择、冲突检查和健康诊断，`scripts/kb_researcher.py` 只负责 CLI 编排。注册表不承载任何研究内容、运行任务或共享 SQLite 状态。
 
+v0.7 开始按职责抽离遗留管理单体。第一批将发布包扫描、README 新鲜度和发布哈希迁入 `kbm/application/package_release.py`，旧 `package-lint` CLI 保持兼容；`kb_manager.py` 的行数棘轮同步从 4275 下调到 4210，禁止迁出的代码重新回流。
+
 旧配置在内存中映射为隐式研究员，不强制迁移配置文件；新建配置写入显式研究员身份和运行命名空间。现有配置继续使用历史名称派生运行目录，避免数据库路径静默变化；新配置使用研究员 ID 作为命名空间。知识库路径身份始终参与计算，避免多个工作区共享 SQLite 或缓存。
 
 ### 渐进式迁移原则

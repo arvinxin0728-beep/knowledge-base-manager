@@ -18,6 +18,12 @@ from typing import Any, Iterable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from kbm.domain.researcher import slug
+from kbm.application.package_release import (
+    package_lint as lint_release_package,
+    refresh_source_hash,
+    source_content_hash as _source_content_hash,
+    tracked_package_files as _tracked_files_for_root,
+)
 from kbm.platform.config import (
     DEFAULT_MAPPING, DEFAULT_OUTPUT_SUBDIRS, DEFAULT_REUSABLE_ASSET_SUBDIRS,
     DEFAULT_SOURCE_SUBDIRS, DEFAULT_TOPIC_PAGE_SUBDIRS, config_defaults,
@@ -28,25 +34,9 @@ from kbm.platform.storage import append_operation_log, backup_file
 
 SOURCE_EXTS = {".md", ".markdown", ".txt", ".html", ".htm", ".pdf", ".epub", ".docx"}
 SKILL_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_HASH_PATH = SKILL_ROOT / ".source_hash"
-
-
 def _tracked_package_files() -> list[Path]:
-    files = sorted([p for p in SKILL_ROOT.rglob("*") if p.is_file()], key=lambda p: str(p))
-    return [
-        p for p in files
-        if p.name != "README.md"
-        and p.suffix.lower() in {".md", ".json", ".yaml", ".yml", ".py", ".rb"}
-        and not str(p.relative_to(SKILL_ROOT)).startswith("tests/")
-        and "__pycache__" not in p.parts
-    ]
-
-
-def _source_content_hash(tracked: list[Path]) -> str:
-    h = hashlib.sha256()
-    for p in sorted(tracked, key=str):
-        h.update(p.read_bytes())
-    return h.hexdigest()
+    """Compatibility wrapper for callers that import the legacy script."""
+    return _tracked_files_for_root(SKILL_ROOT)
 
 
 INDEX_FIELDS = [
@@ -3482,59 +3472,7 @@ def render_quality_gate(result: dict[str, Any]) -> str:
 
 
 def package_lint() -> dict[str, Any]:
-    issues = []
-    files = sorted([p for p in SKILL_ROOT.rglob("*") if p.is_file()], key=lambda p: str(p))
-    required_release_files = ["LICENSE", "CHANGELOG.md", "SECURITY.md", "INSTALL.zh-CN.md", "ARCHITECTURE.md"]
-    for rel in required_release_files:
-        if not (SKILL_ROOT / rel).exists():
-            issues.append({"file": rel, "issue": "missing_release_file"})
-    readme = SKILL_ROOT / "README.md"
-    if not readme.exists():
-        issues.append({"file": "README.md", "issue": "missing_chinese_readme"})
-    else:
-        readme_text = readme.read_text(encoding="utf-8", errors="ignore")
-        required_readme_terms = [
-            "面向产出的研究型知识管理系统",
-            "核心模型",
-            "安装方式",
-            "第一次使用",
-            "质量边界",
-            "README 维护规则",
-            "原文库",
-            "source_libraries",
-            "跨平台使用",
-            "脚本模式",
-            "v0.6.0",
-            "package-lint --strict",
-        ]
-        for term in required_readme_terms:
-            if term not in readme_text:
-                issues.append({"file": "README.md", "issue": "readme_missing_required_section", "term": term})
-        tracked = _tracked_package_files()
-        if tracked:
-            current_hash = _source_content_hash(tracked)
-            ref_hash = SOURCE_HASH_PATH.read_text(encoding="utf-8").strip() if SOURCE_HASH_PATH.exists() else current_hash
-            if current_hash and ref_hash and current_hash != ref_hash:
-                issues.append({
-                    "file": "README.md",
-                    "issue": "readme_older_than_skill_sources",
-                    "newest_source": "source files changed since README was last verified",
-                })
-    for p in files:
-        rel = str(p.relative_to(SKILL_ROOT))
-        if ".bak" in p.name or p.suffix in {".tmp", ".orig"}:
-            issues.append({"file": rel, "issue": "temporary_or_backup_file"})
-        if rel.startswith("references/8xx"):
-            issues.append({"file": rel, "issue": "user_profile_must_not_live_in_default_references"})
-        if "__pycache__" in p.parts:
-            issues.append({"file": rel, "issue": "python_cache_file"})
-        if p.suffix.lower() in {".md", ".json", ".yaml", ".yml", ".py", ".rb"}:
-            text = p.read_text(encoding="utf-8", errors="ignore")
-            if rel.startswith("tests/fixtures/") and "/Users/" in text:
-                issues.append({"file": rel, "issue": "fixture_contains_absolute_user_path"})
-            if rel == "SKILL.md" and "Current 8XX implementation" in text:
-                issues.append({"file": rel, "issue": "main_skill_contains_user_specific_mapping"})
-    return {"passed": not issues, "files_scanned": len(files), "issue_count": len(issues), "issues": issues}
+    return lint_release_package(SKILL_ROOT)
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -3928,9 +3866,7 @@ def cmd_sync_relations(args: argparse.Namespace) -> None:
 def cmd_package_lint(args: argparse.Namespace) -> None:
     result = package_lint()
     if args.apply and result["passed"]:
-        tracked = _tracked_package_files()
-        if tracked:
-            SOURCE_HASH_PATH.write_text(_source_content_hash(tracked), encoding="utf-8")
+        refresh_source_hash(SKILL_ROOT)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if args.strict and not result["passed"]:
         raise SystemExit(2)

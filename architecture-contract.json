@@ -9,7 +9,7 @@
   ],
   "ratchet_budgets": {
     "SKILL.md": {"max_lines": 500, "target_lines": 250},
-    "scripts/kb_manager.py": {"max_lines": 4275, "max_symbols": 170, "target_lines": 800},
+    "scripts/kb_manager.py": {"max_lines": 4210, "max_symbols": 168, "target_lines": 800},
     "scripts/kb_pipeline.py": {"max_lines": 880, "max_symbols": 40, "target_lines": 600},
     "scripts/obsidian_linker.py": {"max_lines": 600, "max_symbols": 40, "target_lines": 500},
     "scripts/ebook_probe.py": {"max_lines": 250, "max_symbols": 15, "target_lines": 250}

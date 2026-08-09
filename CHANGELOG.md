@@ -6,6 +6,18 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-09
+
+### Added
+
+- Application-scoped release package validator for required files, README freshness, portable fixtures, and source hash refresh.
+- Independent regression coverage for release validation and stale-hash detection.
+
+### Changed
+
+- Legacy `package-lint` remains CLI-compatible but delegates to `kbm/application/package_release.py`.
+- `kb_manager.py` decreased from 4271 to 4207 lines and its architecture ratchet decreased to 4210 lines.
+
 ## [0.6.0] - 2026-08-09
 
 ### Added
