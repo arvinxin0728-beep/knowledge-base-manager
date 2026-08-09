@@ -6,6 +6,19 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-08-09
+
+### Added
+
+- Promotion runtime module for idempotent decision ledgers, resumable checkpoints, and system-scoped deterministic stubs.
+- Shared platform clock and JSONL persistence primitives.
+- Regression tests for ledger idempotency, parse-error reporting, checkpoint state, and formal-layer write isolation.
+
+### Changed
+
+- Promotion write behavior remains behind the existing `--apply` and `--create-stubs` boundaries while delegating to the runtime module.
+- `kb_manager.py` decreased from 3601 to 3347 lines; its line ratchet decreased to 3350.
+
 ## [0.7.3] - 2026-08-09
 
 ### Added
