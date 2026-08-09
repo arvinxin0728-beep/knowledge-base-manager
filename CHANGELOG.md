@@ -6,6 +6,18 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-09
+
+### Added
+
+- Dedicated refinement-quality application module covering per-file blockers, warnings, batch repetition detection, and Gate-10 report rendering.
+- Direct feature tests for valid refinements, placeholder rejection, and repeated-model batch blocking.
+
+### Changed
+
+- Existing `gate-10`, `check-refinement`, `run`, pipeline submit, and pipeline adopt workflows retain their CLI contracts while consuming the extracted module.
+- `kb_manager.py` decreased from 4141 to 3833 lines; its line ratchet decreased to 3835.
+
 ## [0.7.1] - 2026-08-09
 
 ### Added
