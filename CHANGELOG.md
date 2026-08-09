@@ -6,6 +6,18 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-09
+
+### Added
+
+- Shared `kbm.domain.markdown` primitives for frontmatter, section, title, wikilink, and recursive Markdown-file parsing.
+- Contract tests for Markdown parsing and deterministic recursive collection.
+
+### Changed
+
+- Gate-10 and governance callers now consume the shared Markdown domain primitives through compatibility imports.
+- `kb_manager.py` decreased from 4207 to 4141 lines; its line ratchet decreased to 4145.
+
 ## [0.7.0] - 2026-08-09
 
 ### Added

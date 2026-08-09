@@ -86,6 +86,8 @@ v0.6 增加研究员控制面：`kbm/application/researcher_registry.py` 负责�
 
 v0.7 开始按职责抽离遗留管理单体。第一批将发布包扫描、README 新鲜度和发布哈希迁入 `kbm/application/package_release.py`，旧 `package-lint` CLI 保持兼容；`kb_manager.py` 的行数棘轮同步从 4275 下调到 4210，禁止迁出的代码重新回流。
 
+v0.7.1 将 Markdown 文件收集、frontmatter、二级章节、标题和 wikilink 解析迁入无工作区依赖的 `kbm/domain/markdown.py`。它是 Gate-10、关系治理和新来源适配器的共享领域基础；主脚本棘轮进一步下调到 4145 行。
+
 旧配置在内存中映射为隐式研究员，不强制迁移配置文件；新建配置写入显式研究员身份和运行命名空间。现有配置继续使用历史名称派生运行目录，避免数据库路径静默变化；新配置使用研究员 ID 作为命名空间。知识库路径身份始终参与计算，避免多个工作区共享 SQLite 或缓存。
 
 ### 渐进式迁移原则

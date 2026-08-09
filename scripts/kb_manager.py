@@ -18,6 +18,10 @@ from typing import Any, Iterable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from kbm.domain.researcher import slug
+from kbm.domain.markdown import (
+    clean_link_target, collect_markdown_files, extract_sections, markdown_title,
+    split_frontmatter, wikilink_targets,
+)
 from kbm.application.package_release import (
     package_lint as lint_release_package,
     refresh_source_hash,
@@ -466,24 +470,6 @@ REFINEMENT_ESSENTIAL_ALIASES = {
     "可复用案例": ["Reusable cases"],
     "候选提升": ["Promotion candidate"],
 }
-
-
-def extract_sections(text: str) -> dict[str, str]:
-    sections: dict[str, str] = {}
-    current_key = None
-    current_lines: list[str] = []
-    for line in text.split("\n"):
-        m = re.match(r"^##\s+(.+)$", line)
-        if m:
-            if current_key and current_lines:
-                sections[current_key] = "\n".join(current_lines).strip()
-            current_key = m.group(1).strip().rstrip(":")
-            current_lines = []
-        elif current_key:
-            current_lines.append(line)
-    if current_key and current_lines:
-        sections[current_key] = "\n".join(current_lines).strip()
-    return sections
 
 
 def check_refinement(path: Path, known_templates: list[str] | None = None) -> dict[str, Any]:
@@ -1243,12 +1229,6 @@ TBD. Generate this from the topic page, not directly from raw sources.
 
 - Fact risk: {c.get('risk')}
 """
-
-
-def collect_markdown_files(path: Path) -> list[Path]:
-    if not path.exists():
-        return []
-    return sorted([p for p in path.rglob("*.md") if p.is_file()], key=lambda p: str(p))
 
 
 def _infer_source_channel(meta: dict[str, Any], path: Path, text: str) -> str:
@@ -2065,52 +2045,6 @@ def render_output_review_status(result: dict[str, Any]) -> str:
     for item in result["items"][:300]:
         lines.append(f"- `{item['id']}` `{item['status']}` `{item['file']}` mechanical={item['mechanical_status']} score={item['mechanical_score']}")
     return "\n".join(lines).rstrip() + "\n"
-
-
-def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
-    if not text.startswith("---\n"):
-        return {}, text
-    end = text.find("\n---", 4)
-    if end == -1:
-        return {}, text
-    raw = text[4:end].strip()
-    body = text[end + len("\n---"):].lstrip("\n")
-    meta: dict[str, Any] = {}
-    current = None
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        if re.match(r"^[A-Za-z0-9_\-]+:\s*", line):
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-            current = key
-            if value == "":
-                meta[key] = []
-            elif value.lower() in {"true", "false"}:
-                meta[key] = value.lower() == "true"
-            else:
-                meta[key] = value.strip('"')
-        elif line.lstrip().startswith("- ") and current:
-            if not isinstance(meta.get(current), list):
-                meta[current] = []
-            meta[current].append(line.strip()[2:].strip('"'))
-    return meta, body
-
-
-def markdown_title(path: Path, text: str) -> str:
-    _meta, body = split_frontmatter(text)
-    match = re.search(r"(?m)^#\s+(.+)$", body)
-    return match.group(1).strip() if match else path.stem
-
-
-def clean_link_target(value: str) -> str:
-    target = str(value).split("|", 1)[0].split("#", 1)[0].strip()
-    return target
-
-
-def wikilink_targets(text: str) -> list[str]:
-    return [clean_link_target(x) for x in re.findall(r"\[\[([^\]]+)\]\]", text)]
 
 
 DATE_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(\d{4}-\d{2}-\d{2})(?:\s+(\d{4}-\d{2}-\d{2}))?\s+(.+)$")
