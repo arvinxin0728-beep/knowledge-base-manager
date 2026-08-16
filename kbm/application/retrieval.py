@@ -208,6 +208,7 @@ def query(cfg: dict[str, Any], text: str, *, limit: int = 10, layers: Iterable[s
                     score += (1 + math.log(counts[term])) * (1 + math.log((total + 1) / (document_frequency[term] + 1)))
                 if term in title_terms:
                     score += 1.5
+            score += 8.0 * len(required_entities & title_terms)
             body = f"{row['heading'] or ''} {row['content']}".lower()
             if text.lower() in body:
                 score += 5.0

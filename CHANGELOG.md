@@ -22,7 +22,7 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 ### Changed
 
 - Pipeline CLI parsing is separated from the transaction engine; legacy direct refinement submission remains compatible while model-run submission is now available.
-- Retrieval excludes YAML frontmatter, down-ranks relationship-navigation sections, requires mixed-language named-entity matches, and preserves original source line citations.
+- Retrieval excludes YAML frontmatter, down-ranks relationship-navigation sections, requires mixed-language named-entity matches, boosts entity-title matches, and preserves original source line citations.
 - `SKILL.md` now uses progressive disclosure and is reduced below the architecture target while routing detailed rules to references.
 - Researcher manifests store only compact execution plans; shared capability definitions are not duplicated into each workspace.
 - Legacy researcher types are deprecated compatibility aliases; new configurations persist `research_design` schema v2 instead of a nominal type.

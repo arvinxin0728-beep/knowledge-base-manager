@@ -113,4 +113,5 @@ def test_navigation_sections_rank_below_substantive_content() -> None:
         search(config, "rebuild", "--apply")
         result = search(config, "query", "--query", "OpenClaw knowledge base")
         assert result["results"][0]["heading"] == "Core analysis"
+        assert result["results"][0]["title"] == "OpenClaw Knowledge Base"
         assert all("openclaw" in item["title"].lower() or "openclaw" in item["snippet"].lower() for item in result["results"])
