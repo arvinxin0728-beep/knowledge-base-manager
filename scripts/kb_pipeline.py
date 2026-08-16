@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ebook_probe import candidate_chapters, chunk_text, extract
 from kbm.platform.config import load_config
 from kbm.interfaces.pipeline_cli import build_parser
-from kbm.application.source_inventory import RefinementCatalog
+from kbm.application.source_inventory import RefinementCatalog, merge_source_attribution, source_is_excluded
 from kbm.application.model_runs import completed_artifacts, ensure_schema as ensure_model_run_schema, fail_active_job_runs, mark_job_committed, mark_validated
 from kbm.platform.paths import (
     db_path, legacy_runtime_dir, local_runtime_dir, runtime_dir,
@@ -246,6 +246,8 @@ def discover(cfg: dict[str, Any], db: sqlite3.Connection) -> dict[str, int]:
         for path in sorted(root.rglob("*"), key=lambda p: str(p)):
             if not path.is_file() or path.suffix.lower() not in SOURCE_EXTS:
                 continue
+            if source_is_excluded(cfg, path, root):
+                continue
             resolved = str(path.resolve())
             stat = path.stat()
             row = db.execute("SELECT * FROM jobs WHERE source_path=?", (resolved,)).fetchone()
@@ -360,12 +362,15 @@ def atomic_write(path: Path, data: str) -> None:
             tmp.unlink()
 
 
-def extract_jobs(cfg: dict[str, Any], db: sqlite3.Connection, limit: int, max_attempts: int, source_type: str | None = None) -> list[dict[str, Any]]:
+def extract_jobs(cfg: dict[str, Any], db: sqlite3.Connection, limit: int, max_attempts: int, source_type: str | None = None, job_id: str | None = None) -> list[dict[str, Any]]:
     where = "(state='discovered' OR (state='failed' AND failed_stage='extract' AND attempts < ?))"
     params: list[Any] = [max_attempts]
     if source_type:
         where += " AND source_type=?"
         params.append(source_type)
+    if job_id:
+        where += " AND job_id=?"
+        params.append(job_id)
     params.append(limit)
     rows = db.execute(f"SELECT * FROM jobs WHERE {where} ORDER BY updated_at LIMIT ?", params).fetchall()
     results = []
@@ -428,13 +433,17 @@ def reap_expired(db: sqlite3.Connection) -> int:
     return len(rows)
 
 
-def claim(cfg: dict[str, Any], db: sqlite3.Connection, worker: str, limit: int, lease_minutes: int, source_type: str | None = None) -> list[dict[str, Any]]:
+def claim(cfg: dict[str, Any], db: sqlite3.Connection, worker: str, limit: int, lease_minutes: int, source_type: str | None = None, job_id: str | None = None) -> list[dict[str, Any]]:
     db.execute("BEGIN IMMEDIATE")
     reap_expired(db)
+    filters = ["state='extracted'"]
+    params: list[Any] = []
     if source_type:
-        rows = db.execute("SELECT * FROM jobs WHERE state='extracted' AND source_type=? ORDER BY updated_at LIMIT ?", (source_type, limit)).fetchall()
-    else:
-        rows = db.execute("SELECT * FROM jobs WHERE state='extracted' ORDER BY updated_at LIMIT ?", (limit,)).fetchall()
+        filters.append("source_type=?"); params.append(source_type)
+    if job_id:
+        filters.append("job_id=?"); params.append(job_id)
+    params.append(limit)
+    rows = db.execute(f"SELECT * FROM jobs WHERE {' AND '.join(filters)} ORDER BY updated_at LIMIT ?", params).fetchall()
     claimed = []
     until = (datetime.now(timezone.utc) + timedelta(minutes=lease_minutes)).replace(microsecond=0).isoformat()
     for row in rows:
@@ -597,6 +606,7 @@ def submit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, token: str,
     if row["state"] != "refining" or row["lease_token"] != token:
         db.rollback()
         raise SystemExit("invalid_or_expired_lease")
+    metadata = merge_source_attribution(Path(row["source_path"]), metadata)
     artifact = Path(row["artifact_dir"])
     staged_note = artifact / "refinement.md"
     staged_metadata = artifact / "refinement-metadata.json"
@@ -851,8 +861,8 @@ def main() -> None:
         elif args.command == "prepare":
             found = discover(cfg, db)
             result = {"discover": found, "extract": extract_jobs(cfg, db, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.max_attempts or int(pipeline_cfg.get("max_attempts", 3)), args.source_type), "status": status(db)}
-        elif args.command == "extract": result = {"jobs": extract_jobs(cfg, db, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.max_attempts or int(pipeline_cfg.get("max_attempts", 3)), args.source_type)}
-        elif args.command == "claim": result = {"jobs": claim(cfg, db, args.worker, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.lease_minutes or int(pipeline_cfg.get("lease_minutes", 120)), args.source_type)}
+        elif args.command == "extract": result = {"jobs": extract_jobs(cfg, db, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.max_attempts or int(pipeline_cfg.get("max_attempts", 3)), args.source_type, args.job_id)}
+        elif args.command == "claim": result = {"jobs": claim(cfg, db, args.worker, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.lease_minutes or int(pipeline_cfg.get("lease_minutes", 120)), args.source_type, args.job_id)}
         elif args.command == "submit": result = submit(cfg, db, args.job_id, args.lease_token, args.refinement, args.metadata, args.model_run_id)
         elif args.command == "commit": result = commit(cfg, db, args.job_id)
         elif args.command == "commit-ready": result = {"jobs": commit_ready(cfg, db, args.limit)}
