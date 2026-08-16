@@ -35,7 +35,8 @@
       "storage-status", "status"
     ],
     "scripts/kb_researcher.py": [
-      "doctor", "init", "list", "register", "registry-init", "select", "show"
+      "capabilities", "doctor", "init", "list", "plan-init", "register",
+      "registry-init", "select", "show", "types"
     ]
   },
   "allowed_script_dependencies": {

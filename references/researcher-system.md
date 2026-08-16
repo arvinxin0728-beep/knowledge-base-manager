@@ -47,6 +47,18 @@ Cross-researcher knowledge transfer is allowed only through explicit import, cit
 
 ## Researcher initialization contract
 
+Treat a researcher type as a task preset, not as a media adapter. Resolve every new researcher from the shared core, one type preset, optional capabilities, and one governance policy. Use `source.video` as a capability of a content, industry, project, or other researcher rather than creating a separate implementation hierarchy for every media combination.
+
+Preview before writing:
+
+```bash
+python3 scripts/kb_researcher.py types
+python3 scripts/kb_researcher.py capabilities
+python3 scripts/kb_researcher.py plan-init --workspace <path> --researcher-id <id> --name <name> --domain <domain> --type <type> [--enable <capability>]
+```
+
+Legacy `--profile knowledge|video` remains supported. It resolves through the same catalog; `video` maps to a content researcher with video, transcript, and media-clip capabilities, and must continue to report the missing video adapter explicitly.
+
 When creating a researcher, record:
 
 ```yaml

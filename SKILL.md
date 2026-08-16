@@ -362,6 +362,7 @@ Use few stable tags and meaningful wikilinks. Do not turn every noun into a tag 
 - `run`: execute all safe deterministic maintenance stages and report the next cognitive action; use `--apply` to write reports.
 - `kb_pipeline.py`: maintain the SQLite task ledger and run recoverable processing, storage inspection, legacy-to-local runtime migration, recoverable legacy retirement, and safe artifact cleanup. Keep runtime data device-local for new installations; preserve legacy behavior until an explicit verified migration. Cleanup and migration default to dry-run.
 - `kb_researcher.py`: initialize, register, list, select, show, and diagnose isolated researcher workspaces through a portable registry. Selection never creates shared process state.
+- `kb_researcher.py types|capabilities|plan-init`: inspect composable researcher presets, resolve dependencies and unavailable adapters, and preview initialization without writing.
 - `obsidian_linker.py`: add Obsidian frontmatter, stable tags, wikilinks, relation sections, and MOC pages for source refinements, topic pages, reusable assets, and outputs.
 
 ### System Files

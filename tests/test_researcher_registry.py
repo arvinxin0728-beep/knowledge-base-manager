@@ -75,6 +75,41 @@ def test_registry_rejects_shared_workspace_and_duplicate_identity() -> None:
         assert "workspace_already_registered" in failed.stdout
 
 
+def test_type_catalog_and_plan_init_are_read_only() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        types = run("types")
+        capabilities = run("capabilities")
+        assert {item["id"] for item in types["types"]} >= {"knowledge-researcher", "content-researcher"}
+        assert {item["id"] for item in capabilities["capabilities"]} >= {"source.video", "output.article"}
+        planned = run(
+            "plan-init", "--workspace", str(root / "planned"), "--researcher-id", "planned",
+            "--name", "Planned", "--domain", "content", "--type", "content-researcher",
+            "--enable", "source.video",
+        )
+        assert planned["plan"]["layout_profile"] == "video"
+        assert planned["plan"]["unavailable"]
+        assert not (root / "planned").exists()
+
+
+def test_new_type_initialization_writes_resolved_manifest() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        registry = root / "registry.json"
+        run("registry-init", "--registry", str(registry), "--apply")
+        result = run(
+            "init", "--registry", str(registry), "--workspace", str(root / "content"),
+            "--researcher-id", "content", "--name", "Content", "--domain", "video content",
+            "--type", "content-researcher", "--enable", "source.video", "--apply",
+        )
+        config = json.loads((root / "content" / "00-系统" / "kb-config.json").read_text(encoding="utf-8"))
+        assert result["plan"]["researcher_type"] == "content-researcher"
+        assert config["researcher"]["type"] == "content-researcher"
+        assert "source.video" in config["capabilities"]["enabled"]
+        assert config["governance"]["policy"] == "publication-standard"
+        assert config["resolved_manifest"]["unavailable"]
+
+
 if __name__ == "__main__":
     test_registry_init_register_select_and_doctor()
     test_registry_rejects_shared_workspace_and_duplicate_identity()
