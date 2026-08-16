@@ -21,6 +21,7 @@ LAYERS = {
     "output": "outputs",
 }
 TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u9fff]")
+NAVIGATION_HEADINGS = {"关联知识", "相关输出", "关联输出", "相关来源", "关联来源", "related outputs", "related sources", "related knowledge"}
 
 
 def now() -> str:
@@ -97,7 +98,8 @@ def _segments(lines: list[str], max_chars: int = 1400, line_offset: int = 0) -> 
     def flush(end: int) -> None:
         nonlocal start, buffer
         content = "\n".join(buffer).strip()
-        if content:
+        has_prose = any(line.strip() and not line.startswith("#") for line in buffer)
+        if content and has_prose:
             segments.append((start, end, heading, content))
         buffer = []
 
@@ -190,19 +192,26 @@ def query(cfg: dict[str, Any], text: str, *, limit: int = 10, layers: Iterable[s
         document_frequency = Counter()
         row_terms = []
         for row in rows:
-            counts = Counter(tokens(f"{row['title']} {row['heading'] or ''} {row['content']}"))
-            row_terms.append((row, counts))
-            document_frequency.update(set(counts) & set(terms))
+            counts = Counter(tokens(f"{row['heading'] or ''} {row['content']}"))
+            title_terms = set(tokens(row["title"]))
+            row_terms.append((row, counts, title_terms))
+            document_frequency.update((set(counts) | title_terms) & set(terms))
         total = max(len(rows), 1)
         ranked = []
-        for row, counts in row_terms:
+        for row, counts, title_terms in row_terms:
             score = 0.0
             for term in terms:
                 if counts[term]:
                     score += (1 + math.log(counts[term])) * (1 + math.log((total + 1) / (document_frequency[term] + 1)))
-            haystack = f"{row['title']} {row['heading'] or ''} {row['content']}".lower()
-            if text.lower() in haystack:
+                if term in title_terms:
+                    score += 1.5
+            body = f"{row['heading'] or ''} {row['content']}".lower()
+            if text.lower() in body:
                 score += 5.0
+            elif text.lower() in row["title"].lower():
+                score += 3.0
+            if (row["heading"] or "").strip().lower() in NAVIGATION_HEADINGS:
+                score *= 0.25
             if score:
                 ranked.append((score, row))
         ranked.sort(key=lambda item: (-item[0], item[1]["relative_path"], item[1]["start_line"]))

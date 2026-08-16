@@ -90,3 +90,22 @@ def test_frontmatter_links_do_not_pollute_ranking_or_snippets() -> None:
         assert result["results"][0]["citation"]["start_line"] == 4
         assert result["results"][0]["citation"]["end_line"] >= result["results"][0]["citation"]["start_line"]
         assert "related_topics" not in result["results"][0]["snippet"]
+
+
+def test_navigation_sections_rank_below_substantive_content() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw); kb = root / "kb"; notes = kb / "10"; notes.mkdir(parents=True)
+        (notes / "openclaw.md").write_text(
+            "# OpenClaw Knowledge Base\n\n## Core analysis\nOpenClaw knowledge base design keeps evidence traceable.\n\n"
+            "## Related outputs\nOpenClaw knowledge base knowledge base knowledge base links.\n",
+            encoding="utf-8",
+        )
+        config = root / "config.json"
+        config.write_text(json.dumps({
+            "version": 1, "name": "Navigation Test", "ai_knowledge_base": str(kb), "source_libraries": {},
+            "mapping": {"system": "00", "source_refinements": "10", "topic_pages": "20", "reusable_assets": "30", "outputs": "40"},
+            "pipeline": {"runtime_storage": "legacy", "artifact_retention_days": 7},
+        }), encoding="utf-8")
+        search(config, "rebuild", "--apply")
+        result = search(config, "query", "--query", "OpenClaw knowledge base")
+        assert result["results"][0]["heading"] == "Core analysis"
