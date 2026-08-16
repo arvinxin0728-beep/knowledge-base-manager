@@ -10,17 +10,18 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ### Added
 
-- Composable researcher types and dependency-resolved capability plans, including a portable role-enablement researcher.
+- Multidimensional researcher designs covering identity, scope, sources, process, outputs, capabilities, and governance, with optional editable presets.
 - Executable capability contracts for bundled code, model instructions, and instance-provided adapters.
 - Instance-aware, redacted adapter readiness diagnostics for video and enterprise document connectors.
 - Privacy gates that reject embedded connector values, private paths, raw secrets, and enterprise markers in release packages.
-- Four-researcher release acceptance matrix covering knowledge, video/content, industry, and role enablement.
+- Cross-dimensional acceptance matrix proving themes, media sources, research processes, audiences, and outputs can be composed independently.
 - Dedicated application modules for evidence intake, source indexing, mechanical output quality, and editorial quality.
 
 ### Changed
 
 - `SKILL.md` now uses progressive disclosure and is reduced below the architecture target while routing detailed rules to references.
 - Researcher manifests store only compact execution plans; shared capability definitions are not duplicated into each workspace.
+- Legacy researcher types are deprecated compatibility aliases; new configurations persist `research_design` schema v2 instead of a nominal type.
 - Enterprise integrations are declared as generic `instance_only` adapter capabilities and remain blocked until configured and available.
 - The architecture ratchet for `SKILL.md` is lowered to prevent renewed entrypoint growth.
 

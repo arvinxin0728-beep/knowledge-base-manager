@@ -1,6 +1,6 @@
 ---
 name: knowledge-base-manager
-description: Initialize and operate one or many isolated research agents with mapped source libraries, recoverable processing, durable knowledge, topic synthesis, reusable assets, outputs, quality gates, and optional enterprise integrations. Use when Codex needs to create, audit, migrate, or evolve a portable research knowledge system; initialize different researcher types; process unread books, articles, public-account posts, webpages, transcripts, or videos; manage a WeChat/public-account Markdown library; refine sources; synthesize topics; create knowledge assets or publishable outputs; or diagnose researcher configuration, lifecycle, evidence, privacy, and release readiness.
+description: Initialize and operate one or many isolated research agents with configurable scope, sources, process, outputs, capabilities, governance, recoverable processing, and quality gates. Use when Codex needs to create, audit, migrate, or evolve a portable research knowledge system; design a researcher; process books, articles, public-account posts, webpages, transcripts, or videos; refine sources; synthesize topics; create reusable assets or outputs; or diagnose configuration, lifecycle, evidence, privacy, and release readiness.
 ---
 
 # Knowledge Base Manager
@@ -22,7 +22,8 @@ Resolve each researcher from:
 
 ```text
 shared core
-+ researcher type
++ research scope, sources, process, and outputs
++ optional starter preset
 + capability contracts
 + governance policy
 + instance-local mapping and adapters
@@ -34,8 +35,8 @@ Preview high-cost or multi-stage work, record checkpoints, and resume instead of
 
 | Request | Read first | Primary action |
 |---|---|---|
-| Initialize, select, or coordinate researchers | `references/researcher-system.md`, `references/setup-and-config.md` | Preview a composable type/capability plan, then create or map one isolated workspace. |
-| Add or change a type, capability, dependency, or adapter | `references/capability-contracts.md` | Define an executable contract; validate dependencies and readiness. |
+| Initialize, select, or coordinate researchers | `references/researcher-system.md`, `references/setup-and-config.md` | Compose a research design, preview its plan, then create or map one isolated workspace. |
+| Add a preset, capability, dependency, or adapter | `references/capability-contracts.md` | Keep dimensions independent; define an executable contract and validate readiness. |
 | Add MCP, DingTalk, Feishu, or enterprise integration | `references/privacy-and-enterprise-connectors.md` | Keep contracts portable and all values/data instance-local. |
 | Process unread or new sources | `references/pipeline.md`, `references/reading-and-refinement.md` | Discover, prepare, extract, claim, refine, submit, and commit a bounded batch. |
 | Read or refine one book/article/source | `references/reading-and-refinement.md` | Perform active reading and create one traceable durable refinement. |
@@ -78,7 +79,7 @@ Keep new runtime databases and extraction caches device-local. Migrate legacy ru
 
 ## Researcher and capability rules
 
-Treat researcher types as task presets, not media or organization names. Add video, transcript, DingTalk, Feishu, or other sources as capabilities/adapters. Keep organization-specific taxonomies and knowledge outside the shared package.
+Model researcher identity, scope, sources, process, outputs, capabilities, and governance as independent dimensions. Presets provide editable defaults, never identity or mutually exclusive classes. Keep organization-specific taxonomies and knowledge outside the shared package.
 
 Every capability must declare its dependency, execution mode, portable entrypoint, inputs, outputs, quality gates, configuration fields, availability, and configuration scope. Use:
 
@@ -171,7 +172,7 @@ Use `scripts/kb_researcher.py` for researcher registry, selection, composable in
 
 ```text
 registry-init  register  list  select  show  doctor
-types  capabilities  plan-init  init
+presets  types(deprecated)  capabilities  plan-init  init
 ```
 
 Use `scripts/obsidian_linker.py`, `scripts/ebook_probe.py`, and `scripts/official_account_library.rb` for their declared deterministic modules.

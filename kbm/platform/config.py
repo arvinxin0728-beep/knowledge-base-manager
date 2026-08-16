@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kbm.domain.researcher import researcher_from_config
+from kbm.domain.research_design import OUTPUT_OPTIONS, PROCESS_OPTIONS, RESEARCH_PRESETS, SOURCE_OPTIONS
 
 
 DEFAULT_MAPPING = {"system": "00-system", "source_refinements": "10-source-refinements", "topic_pages": "20-topic-pages", "reusable_assets": "30-reusable-assets", "outputs": "40-outputs"}
@@ -96,6 +97,25 @@ def validate_config(cfg: dict[str, Any]) -> list[dict[str, str]]:
         errors.extend(researcher_from_config(cfg).validation_errors())
         if isinstance(raw_researcher, dict) and not isinstance(raw_researcher.get("shared_methods", []), list):
             errors.append({"field": "researcher.shared_methods", "error": "must_be_array"})
+    design = cfg.get("research_design")
+    if design is not None:
+        if not isinstance(design, dict):
+            errors.append({"field": "research_design", "error": "must_be_object"})
+        else:
+            if design.get("schema_version") != 2:
+                errors.append({"field": "research_design.schema_version", "error": "unsupported_version"})
+            preset = design.get("preset")
+            if preset is not None and preset not in RESEARCH_PRESETS:
+                errors.append({"field": "research_design.preset", "error": "unknown_preset"})
+            scope = design.get("scope")
+            if not isinstance(scope, dict) or not isinstance(scope.get("theme"), str) or not scope["theme"].strip():
+                errors.append({"field": "research_design.scope.theme", "error": "required_non_empty_string"})
+            for field, catalog in (("sources", SOURCE_OPTIONS), ("process", PROCESS_OPTIONS), ("outputs", OUTPUT_OPTIONS)):
+                values = design.get(field)
+                if not isinstance(values, list):
+                    errors.append({"field": f"research_design.{field}", "error": "must_be_array"})
+                elif any(value not in catalog for value in values):
+                    errors.append({"field": f"research_design.{field}", "error": "contains_unknown_value"})
     return errors
 
 

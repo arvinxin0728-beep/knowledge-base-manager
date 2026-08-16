@@ -79,7 +79,10 @@ def test_type_catalog_and_plan_init_are_read_only() -> None:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
         types = run("types")
+        presets = run("presets")
         capabilities = run("capabilities")
+        assert types["deprecated"] is True
+        assert {item["id"] for item in presets["presets"]} >= {"general-knowledge", "industry-intelligence"}
         assert {item["id"] for item in types["types"]} >= {"knowledge-researcher", "content-researcher"}
         assert {item["id"] for item in capabilities["capabilities"]} >= {"source.video", "output.article"}
         planned = run(
@@ -87,30 +90,48 @@ def test_type_catalog_and_plan_init_are_read_only() -> None:
             "--name", "Planned", "--domain", "content", "--type", "content-researcher",
             "--enable", "source.video",
         )
-        assert planned["plan"]["layout_profile"] == "video"
+        assert planned["plan"]["layout_profile"] == "mixed"
         assert planned["plan"]["unavailable"]
         assert not (root / "planned").exists()
 
 
-def test_new_type_initialization_writes_resolved_manifest() -> None:
+def test_new_preset_initialization_writes_multidimensional_manifest() -> None:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)
         registry = root / "registry.json"
         run("registry-init", "--registry", str(registry), "--apply")
         result = run(
             "init", "--registry", str(registry), "--workspace", str(root / "content"),
-            "--researcher-id", "content", "--name", "Content", "--domain", "video content",
-            "--type", "content-researcher", "--enable", "source.video", "--apply",
+            "--researcher-id", "content", "--name", "Content", "--theme", "video content",
+            "--preset", "content-publication", "--source", "video", "--apply",
         )
         config = json.loads((root / "content" / "00-系统" / "kb-config.json").read_text(encoding="utf-8"))
-        assert result["plan"]["researcher_type"] == "content-researcher"
-        assert config["researcher"]["type"] == "content-researcher"
+        assert "researcher_type" not in result["plan"]
+        assert "type" not in config["researcher"]
+        assert config["research_design"]["preset"] == "content-publication"
+        assert {"article", "video"} <= set(config["research_design"]["sources"])
         assert "source.video" in config["capabilities"]["enabled"]
         assert config["governance"]["policy"] == "publication-standard"
         assert config["resolved_manifest"]["unavailable"]
         assert config["resolved_manifest"]["capability_catalog_version"] == 2
         assert config["resolved_manifest"]["execution_plan"]
         assert all(set(step) == {"sequence", "id", "status", "entrypoint"} for step in config["resolved_manifest"]["execution_plan"])
+
+
+def test_legacy_type_initialization_remains_explicitly_deprecated() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        registry = root / "registry.json"
+        run("registry-init", "--registry", str(registry), "--apply")
+        run(
+            "init", "--registry", str(registry), "--workspace", str(root / "legacy"),
+            "--researcher-id", "legacy", "--name", "Legacy", "--theme", "legacy",
+            "--type", "industry-researcher", "--apply",
+        )
+        config = json.loads((root / "legacy" / "00-系统" / "kb-config.json").read_text(encoding="utf-8"))
+        assert config["researcher"]["type"] == "industry-researcher"
+        assert config["researcher"]["type_deprecated"] is True
+        assert config["research_design"]["preset"] == "industry-intelligence"
 
 
 def test_doctor_rejects_raw_connector_secrets_in_one_researcher_instance() -> None:

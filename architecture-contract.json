@@ -34,8 +34,8 @@
       "cleanup", "migrate-runtime", "retire-legacy-runtime",
       "storage-status", "status"
     ],
-    "scripts/kb_researcher.py": [
-      "capabilities", "doctor", "init", "list", "plan-init", "register",
+    "kbm/interfaces/researcher_cli.py": [
+      "capabilities", "doctor", "init", "list", "plan-init", "presets", "register",
       "registry-init", "select", "show", "types"
     ]
   },
