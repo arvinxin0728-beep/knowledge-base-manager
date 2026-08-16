@@ -45,20 +45,27 @@ Claim extracted jobs before model work:
 python3 scripts/kb_pipeline.py --config <config> claim --worker <stable-worker-name> --limit 5 --lease-minutes 120
 ```
 
+For an explicitly selected source, pass its discovered `--job-id` to both
+`extract` and `claim` so other unread sources remain untouched.
+
 For every claimed job:
 
 1. Read `extracted_text` or the relevant records in `chunks_file`.
 2. Follow `references/reading-and-refinement.md`.
 3. Write a refinement Markdown file with every required heading.
 4. Write metadata JSON with `title`, `topics`, `fact_risk`, and `fact_check_required`.
-5. Submit the result before the lease expires:
+5. Record model execution with `model-transactions-and-retrieval.md`, or use the compatible direct submission below.
+6. Submit the result before the lease expires:
 
 ```bash
 python3 scripts/kb_pipeline.py --config <config> submit \
   --job-id <id> --lease-token <token> \
   --refinement <note.md> --metadata <metadata.json>
 ```
-```
+
+For Markdown sources, submission fills missing `account`, `author`,
+`published_at`, `saved_at`, and `url` from source frontmatter. Explicit model
+metadata remains authoritative.
 
 > **Gate-10 enforcement**: `submit` and `adopt-existing` automatically run `check-refinement` before accepting. Blocked-by-gate10 errors require fixing the refinement before retry.
 
@@ -166,6 +173,9 @@ For Chinese knowledge bases, preserve the original source title and use the esta
 - Never write `processed-index.jsonl` manually while the pipeline is active.
 - Treat `commit` and `commit-ready` as the only completion boundary.
 - Re-run `prepare`; discovery and extraction are idempotent for unchanged files.
+- When a source root also contains operational Markdown or generated inventories,
+  set `pipeline.source_exclude_globs` to relative glob patterns. Discovery and
+  source audits apply the same instance-local exclusions.
 - During discovery, reconcile legacy index records by resolved source path first and unique content hash second. If a legacy record has an empty output path, adopt the canonical destination only when that refinement file already exists; never deduplicate by title alone.
 - Do not delete `<system>/runtime` while work is in progress.
 - Use `cleanup` instead of manually deleting artifact directories. Keep a nonzero retention period for live knowledge bases.

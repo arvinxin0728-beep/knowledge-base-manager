@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from kbm.domain.researcher import researcher_from_config
+from kbm.domain.research_design import OUTPUT_OPTIONS, PROCESS_OPTIONS, RESEARCH_PRESETS, SOURCE_OPTIONS
 
 
 DEFAULT_MAPPING = {"system": "00-system", "source_refinements": "10-source-refinements", "topic_pages": "20-topic-pages", "reusable_assets": "30-reusable-assets", "outputs": "40-outputs"}
@@ -39,6 +40,7 @@ def config_defaults() -> dict[str, Any]:
         "promotion_rules": {"min_sources_for_topic": 3, "allow_user_requested_topic": True, "fact_check_before_public_output": True},
         "integrations": {"obsidian": {"enabled": False}},
         "pipeline": {"chunk_size": 5000, "default_batch_size": 10, "max_attempts": 3, "lease_minutes": 120, "runtime_storage": "legacy", "artifact_retention_days": 7},
+        "retrieval": {"engine": "lexical-v1", "default_limit": 10},
         "quality": {
             "template_patterns": [
                 r"任务定义\s*->\s*工具/Skill 封装\s*->\s*权限与数据接入\s*->\s*自动执行\s*->\s*复盘迭代",
@@ -89,6 +91,15 @@ def validate_config(cfg: dict[str, Any]) -> list[dict[str, str]]:
     namespace = pipeline.get("runtime_namespace")
     if namespace is not None and (not isinstance(namespace, str) or not namespace.strip()):
         errors.append({"field": "pipeline.runtime_namespace", "error": "must_be_non_empty_string"})
+    retrieval = cfg.get("retrieval")
+    if retrieval is not None:
+        if not isinstance(retrieval, dict):
+            errors.append({"field": "retrieval", "error": "must_be_object"})
+        else:
+            if retrieval.get("engine") != "lexical-v1":
+                errors.append({"field": "retrieval.engine", "error": "unsupported_engine"})
+            if not isinstance(retrieval.get("default_limit"), int) or retrieval["default_limit"] <= 0:
+                errors.append({"field": "retrieval.default_limit", "error": "must_be_positive_integer"})
     raw_researcher = cfg.get("researcher")
     if raw_researcher is not None and not isinstance(raw_researcher, dict):
         errors.append({"field": "researcher", "error": "must_be_object"})
@@ -96,6 +107,25 @@ def validate_config(cfg: dict[str, Any]) -> list[dict[str, str]]:
         errors.extend(researcher_from_config(cfg).validation_errors())
         if isinstance(raw_researcher, dict) and not isinstance(raw_researcher.get("shared_methods", []), list):
             errors.append({"field": "researcher.shared_methods", "error": "must_be_array"})
+    design = cfg.get("research_design")
+    if design is not None:
+        if not isinstance(design, dict):
+            errors.append({"field": "research_design", "error": "must_be_object"})
+        else:
+            if design.get("schema_version") != 2:
+                errors.append({"field": "research_design.schema_version", "error": "unsupported_version"})
+            preset = design.get("preset")
+            if preset is not None and preset not in RESEARCH_PRESETS:
+                errors.append({"field": "research_design.preset", "error": "unknown_preset"})
+            scope = design.get("scope")
+            if not isinstance(scope, dict) or not isinstance(scope.get("theme"), str) or not scope["theme"].strip():
+                errors.append({"field": "research_design.scope.theme", "error": "required_non_empty_string"})
+            for field, catalog in (("sources", SOURCE_OPTIONS), ("process", PROCESS_OPTIONS), ("outputs", OUTPUT_OPTIONS)):
+                values = design.get(field)
+                if not isinstance(values, list):
+                    errors.append({"field": f"research_design.{field}", "error": "must_be_array"})
+                elif any(value not in catalog for value in values):
+                    errors.append({"field": f"research_design.{field}", "error": "contains_unknown_value"})
     return errors
 
 

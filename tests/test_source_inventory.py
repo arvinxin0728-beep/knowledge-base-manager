@@ -68,8 +68,24 @@ def test_source_identity_normalizes_unicode_punctuation() -> None:
     assert normalized_source_name("2026-08-09 2026-07-24 2026-04-12 研究方法.md") == normalized_source_name("2026-04-12 研究方法.md")
 
 
+def test_inventory_applies_instance_source_exclusions() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        cfg = make_config(root)
+        sources = root / "sources"
+        (sources / "article.md").write_text("source", encoding="utf-8")
+        (sources / ".agents").mkdir()
+        (sources / ".agents" / "SKILL.md").write_text("operations", encoding="utf-8")
+        (sources / "library_2026-08-11.md").write_text("inventory", encoding="utf-8")
+        cfg["pipeline"] = {"source_exclude_globs": [".agents/**", "library_*.md"]}
+        result = audit_sources(cfg)
+        assert result["source_count"] == 1
+        assert result["unprocessed"][0]["path"] == str((sources / "article.md").resolve())
+
+
 if __name__ == "__main__":
     test_inventory_rejects_temporary_output_and_recovers_unique_renamed_refinement()
     test_inventory_keeps_ambiguous_refinement_unprocessed()
     test_source_identity_normalizes_unicode_punctuation()
+    test_inventory_applies_instance_source_exclusions()
     print("ok")

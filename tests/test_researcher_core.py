@@ -43,6 +43,23 @@ def test_explicit_researcher_contract_is_validated() -> None:
     assert {"researcher.id", "researcher.name", "researcher.domain", "researcher.role", "researcher.isolation", "researcher.shared_methods"} <= fields
 
 
+def test_research_design_v2_dimensions_are_validated() -> None:
+    cfg = {
+        "version": 1, "source_libraries": {}, "ai_knowledge_base": "/tmp/kb",
+        "mapping": {"system": "00", "source_refinements": "10", "topic_pages": "20", "reusable_assets": "30", "outputs": "40"},
+        "pipeline": {"runtime_storage": "local", "artifact_retention_days": 7},
+        "research_design": {
+            "schema_version": 1, "preset": "unknown", "scope": {"theme": ""},
+            "sources": ["unknown"], "process": "active-reading", "outputs": [],
+        },
+    }
+    fields = {item["field"] for item in validate_config(cfg)}
+    assert {
+        "research_design.schema_version", "research_design.preset", "research_design.scope.theme",
+        "research_design.sources", "research_design.process",
+    } <= fields
+
+
 def test_two_researchers_keep_runtime_state_and_system_files_isolated() -> None:
     with tempfile.TemporaryDirectory() as raw:
         root = Path(raw)

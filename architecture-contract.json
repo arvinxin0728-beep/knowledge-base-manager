@@ -8,12 +8,14 @@
     "infrastructure"
   ],
   "ratchet_budgets": {
-    "SKILL.md": {"max_lines": 500, "target_lines": 250},
+    "SKILL.md": {"max_lines": 200, "target_lines": 180},
     "scripts/kb_manager.py": {"max_lines": 2975, "max_symbols": 115, "target_lines": 800},
     "scripts/kb_pipeline.py": {"max_lines": 880, "max_symbols": 40, "target_lines": 600},
     "scripts/obsidian_linker.py": {"max_lines": 600, "max_symbols": 40, "target_lines": 500},
     "scripts/ebook_probe.py": {"max_lines": 250, "max_symbols": 15, "target_lines": 250}
     ,"scripts/kb_researcher.py": {"max_lines": 230, "max_symbols": 20, "target_lines": 180}
+    ,"scripts/kb_model.py": {"max_lines": 80, "max_symbols": 5, "target_lines": 70}
+    ,"scripts/kb_search.py": {"max_lines": 60, "max_symbols": 5, "target_lines": 55}
   },
   "legacy_cli_contracts": {
     "scripts/kb_manager.py": [
@@ -28,14 +30,21 @@
       "check-refinement", "sync-relations", "package-lint",
       "validate-config", "doctor", "run"
     ],
-    "scripts/kb_pipeline.py": [
+    "kbm/interfaces/pipeline_cli.py": [
       "init", "discover", "prepare", "extract", "claim", "submit",
       "commit", "commit-ready", "fail", "adopt-existing", "retry",
       "cleanup", "migrate-runtime", "retire-legacy-runtime",
       "storage-status", "status"
     ],
-    "scripts/kb_researcher.py": [
-      "doctor", "init", "list", "register", "registry-init", "select", "show"
+    "kbm/interfaces/researcher_cli.py": [
+      "capabilities", "doctor", "init", "list", "plan-init", "presets", "register",
+      "registry-init", "select", "show", "types"
+    ],
+    "scripts/kb_model.py": [
+      "complete", "fail", "list", "start", "status"
+    ],
+    "scripts/kb_search.py": [
+      "query", "rebuild", "status"
     ]
   },
   "allowed_script_dependencies": {
@@ -43,7 +52,9 @@
     "obsidian_linker.py": [],
     "kb_manager.py": ["obsidian_linker.py", "kb_pipeline.py"],
     "kb_pipeline.py": ["ebook_probe.py", "kb_manager.py"],
-    "kb_researcher.py": ["kb_manager.py"]
+    "kb_researcher.py": ["kb_manager.py"],
+    "kb_model.py": [],
+    "kb_search.py": []
   },
   "module_dependency_rules": {
     "kbm/domain": ["kbm.platform", "kbm.application", "kbm.infrastructure", "kbm.interfaces", "scripts"],

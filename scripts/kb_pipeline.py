@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -20,7 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_probe import candidate_chapters, chunk_text, extract
 from kbm.platform.config import load_config
-from kbm.application.source_inventory import RefinementCatalog
+from kbm.interfaces.pipeline_cli import build_parser
+from kbm.application.source_inventory import RefinementCatalog, merge_source_attribution, source_is_excluded
+from kbm.application.model_runs import completed_artifacts, ensure_schema as ensure_model_run_schema, fail_active_job_runs, mark_job_committed, mark_validated
 from kbm.platform.paths import (
     db_path, legacy_runtime_dir, local_runtime_dir, runtime_dir,
     system_active_file, system_dir,
@@ -215,6 +216,7 @@ def connect(cfg: dict[str, Any]) -> sqlite3.Connection:
         );
         """
     )
+    ensure_model_run_schema(db)
     return db
 
 
@@ -243,6 +245,8 @@ def discover(cfg: dict[str, Any], db: sqlite3.Connection) -> dict[str, int]:
             continue
         for path in sorted(root.rglob("*"), key=lambda p: str(p)):
             if not path.is_file() or path.suffix.lower() not in SOURCE_EXTS:
+                continue
+            if source_is_excluded(cfg, path, root):
                 continue
             resolved = str(path.resolve())
             stat = path.stat()
@@ -358,12 +362,15 @@ def atomic_write(path: Path, data: str) -> None:
             tmp.unlink()
 
 
-def extract_jobs(cfg: dict[str, Any], db: sqlite3.Connection, limit: int, max_attempts: int, source_type: str | None = None) -> list[dict[str, Any]]:
+def extract_jobs(cfg: dict[str, Any], db: sqlite3.Connection, limit: int, max_attempts: int, source_type: str | None = None, job_id: str | None = None) -> list[dict[str, Any]]:
     where = "(state='discovered' OR (state='failed' AND failed_stage='extract' AND attempts < ?))"
     params: list[Any] = [max_attempts]
     if source_type:
         where += " AND source_type=?"
         params.append(source_type)
+    if job_id:
+        where += " AND job_id=?"
+        params.append(job_id)
     params.append(limit)
     rows = db.execute(f"SELECT * FROM jobs WHERE {where} ORDER BY updated_at LIMIT ?", params).fetchall()
     results = []
@@ -417,6 +424,7 @@ def reap_expired(db: sqlite3.Connection) -> int:
     stamp = now()
     rows = db.execute("SELECT job_id FROM jobs WHERE state='refining' AND lease_until < ?", (stamp,)).fetchall()
     for row in rows:
+        fail_active_job_runs(db, row["job_id"], "lease_expired", "pipeline lease expired before model completion")
         db.execute(
             "UPDATE jobs SET state='extracted',lease_owner=NULL,lease_token=NULL,lease_until=NULL,updated_at=? WHERE job_id=?",
             (stamp, row["job_id"]),
@@ -425,13 +433,17 @@ def reap_expired(db: sqlite3.Connection) -> int:
     return len(rows)
 
 
-def claim(cfg: dict[str, Any], db: sqlite3.Connection, worker: str, limit: int, lease_minutes: int, source_type: str | None = None) -> list[dict[str, Any]]:
+def claim(cfg: dict[str, Any], db: sqlite3.Connection, worker: str, limit: int, lease_minutes: int, source_type: str | None = None, job_id: str | None = None) -> list[dict[str, Any]]:
     db.execute("BEGIN IMMEDIATE")
     reap_expired(db)
+    filters = ["state='extracted'"]
+    params: list[Any] = []
     if source_type:
-        rows = db.execute("SELECT * FROM jobs WHERE state='extracted' AND source_type=? ORDER BY updated_at LIMIT ?", (source_type, limit)).fetchall()
-    else:
-        rows = db.execute("SELECT * FROM jobs WHERE state='extracted' ORDER BY updated_at LIMIT ?", (limit,)).fetchall()
+        filters.append("source_type=?"); params.append(source_type)
+    if job_id:
+        filters.append("job_id=?"); params.append(job_id)
+    params.append(limit)
+    rows = db.execute(f"SELECT * FROM jobs WHERE {' AND '.join(filters)} ORDER BY updated_at LIMIT ?", params).fetchall()
     claimed = []
     until = (datetime.now(timezone.utc) + timedelta(minutes=lease_minutes)).replace(microsecond=0).isoformat()
     for row in rows:
@@ -565,7 +577,11 @@ def index_rows(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def submit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, token: str, refinement: Path, metadata_path: Path) -> dict[str, Any]:
+def submit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, token: str, refinement: Path | None, metadata_path: Path | None, model_run_id: str | None = None) -> dict[str, Any]:
+    if model_run_id:
+        refinement, metadata_path = completed_artifacts(db, model_run_id, job_id, token)
+    if refinement is None or metadata_path is None:
+        raise SystemExit("refinement_and_metadata_or_model_run_required")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     errors = validate_refinement(refinement, metadata)
     if errors:
@@ -590,6 +606,7 @@ def submit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, token: str,
     if row["state"] != "refining" or row["lease_token"] != token:
         db.rollback()
         raise SystemExit("invalid_or_expired_lease")
+    metadata = merge_source_attribution(Path(row["source_path"]), metadata)
     artifact = Path(row["artifact_dir"])
     staged_note = artifact / "refinement.md"
     staged_metadata = artifact / "refinement-metadata.json"
@@ -600,8 +617,10 @@ def submit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str, token: str,
         (str(staged_note), str(staged_metadata), now(), job_id),
     )
     event(db, job_id, "submitted", "refining", "refined")
+    if model_run_id:
+        mark_validated(db, model_run_id)
     db.commit()
-    return {"submitted": True, "idempotent": False, "state": "refined", "refinement_file": str(staged_note)}
+    return {"submitted": True, "idempotent": False, "state": "refined", "refinement_file": str(staged_note), "model_run_id": model_run_id}
 
 
 def commit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str) -> dict[str, Any]:
@@ -646,6 +665,7 @@ def commit(cfg: dict[str, Any], db: sqlite3.Connection, job_id: str) -> dict[str
         (str(dest), now(), now(), job_id),
     )
     event(db, job_id, "committed", "refined", "committed", {"output_file": str(dest)})
+    mark_job_committed(db, job_id)
     db.commit()
     return {"committed": True, "idempotent": False, "output_file": str(dest)}
 
@@ -661,6 +681,7 @@ def fail(db: sqlite3.Connection, job_id: str, token: str, error: str) -> dict[st
         (error[:2000], now(), job_id),
     )
     event(db, job_id, "refine_failed", "refining", "failed", {"error": error[:500]})
+    fail_active_job_runs(db, job_id, "refinement_failed", error)
     db.commit()
     return {"job_id": job_id, "state": "failed"}
 
@@ -821,27 +842,7 @@ def cleanup_artifacts(cfg: dict[str, Any], db: sqlite3.Connection, retention_day
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Recoverable knowledge-source processing pipeline")
-    parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--version", action="version", version=PIPELINE_VERSION)
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("init")
-    sub.add_parser("discover")
-    p_prepare = sub.add_parser("prepare"); p_prepare.add_argument("--limit", type=int); p_prepare.add_argument("--max-attempts", type=int); p_prepare.add_argument("--source-type")
-    p_extract = sub.add_parser("extract"); p_extract.add_argument("--limit", type=int); p_extract.add_argument("--max-attempts", type=int); p_extract.add_argument("--source-type")
-    p_claim = sub.add_parser("claim"); p_claim.add_argument("--worker", required=True); p_claim.add_argument("--limit", type=int); p_claim.add_argument("--lease-minutes", type=int); p_claim.add_argument("--source-type")
-    p_submit = sub.add_parser("submit"); p_submit.add_argument("--job-id", required=True); p_submit.add_argument("--lease-token", required=True); p_submit.add_argument("--refinement", required=True, type=Path); p_submit.add_argument("--metadata", required=True, type=Path)
-    p_commit = sub.add_parser("commit"); p_commit.add_argument("--job-id", required=True)
-    p_commit_ready = sub.add_parser("commit-ready"); p_commit_ready.add_argument("--limit", type=int, default=100)
-    p_fail = sub.add_parser("fail"); p_fail.add_argument("--job-id", required=True); p_fail.add_argument("--lease-token", required=True); p_fail.add_argument("--error", required=True)
-    p_adopt = sub.add_parser("adopt-existing"); p_adopt.add_argument("--job-id", required=True); p_adopt.add_argument("--existing-file", required=True, type=Path)
-    p_retry = sub.add_parser("retry"); p_retry.add_argument("--limit", type=int, default=10)
-    p_cleanup = sub.add_parser("cleanup"); p_cleanup.add_argument("--retention-days", type=int); p_cleanup.add_argument("--apply", action="store_true")
-    p_migrate = sub.add_parser("migrate-runtime"); p_migrate.add_argument("--apply", action="store_true")
-    p_retire = sub.add_parser("retire-legacy-runtime"); p_retire.add_argument("--apply", action="store_true")
-    sub.add_parser("storage-status")
-    sub.add_parser("status")
-    args = parser.parse_args()
+    args = build_parser(PIPELINE_VERSION).parse_args()
     cfg = load_config(args.config)
     pipeline_cfg = cfg.get("pipeline", {})
     if args.command == "migrate-runtime":
@@ -860,9 +861,9 @@ def main() -> None:
         elif args.command == "prepare":
             found = discover(cfg, db)
             result = {"discover": found, "extract": extract_jobs(cfg, db, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.max_attempts or int(pipeline_cfg.get("max_attempts", 3)), args.source_type), "status": status(db)}
-        elif args.command == "extract": result = {"jobs": extract_jobs(cfg, db, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.max_attempts or int(pipeline_cfg.get("max_attempts", 3)), args.source_type)}
-        elif args.command == "claim": result = {"jobs": claim(cfg, db, args.worker, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.lease_minutes or int(pipeline_cfg.get("lease_minutes", 120)), args.source_type)}
-        elif args.command == "submit": result = submit(cfg, db, args.job_id, args.lease_token, args.refinement, args.metadata)
+        elif args.command == "extract": result = {"jobs": extract_jobs(cfg, db, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.max_attempts or int(pipeline_cfg.get("max_attempts", 3)), args.source_type, args.job_id)}
+        elif args.command == "claim": result = {"jobs": claim(cfg, db, args.worker, args.limit or int(pipeline_cfg.get("default_batch_size", 10)), args.lease_minutes or int(pipeline_cfg.get("lease_minutes", 120)), args.source_type, args.job_id)}
+        elif args.command == "submit": result = submit(cfg, db, args.job_id, args.lease_token, args.refinement, args.metadata, args.model_run_id)
         elif args.command == "commit": result = commit(cfg, db, args.job_id)
         elif args.command == "commit-ready": result = {"jobs": commit_ready(cfg, db, args.limit)}
         elif args.command == "fail": result = fail(db, args.job_id, args.lease_token, args.error)

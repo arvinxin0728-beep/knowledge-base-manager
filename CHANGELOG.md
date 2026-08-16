@@ -6,6 +6,39 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-16
+
+### Added
+
+- Transactional model-run ledger with prompt/model identity, input/output hashes, durable snapshots, usage metrics, failure records, validation, and commit linkage.
+- Device-local `lexical-v1` retrieval index across the four durable knowledge layers with ranked snippets and line-addressable citations.
+- Multidimensional researcher designs covering identity, scope, sources, process, outputs, capabilities, and governance, with optional editable presets.
+- Executable capability contracts for bundled code, model instructions, and instance-provided adapters.
+- Instance-aware, redacted adapter readiness diagnostics for video and enterprise document connectors.
+- Privacy gates that reject embedded connector values, private paths, raw secrets, and enterprise markers in release packages.
+- Cross-dimensional acceptance matrix proving themes, media sources, research processes, audiences, and outputs can be composed independently.
+- Dedicated application modules for evidence intake, source indexing, mechanical output quality, and editorial quality.
+
+### Changed
+
+- Pipeline CLI parsing is separated from the transaction engine; legacy direct refinement submission remains compatible while model-run submission is now available.
+- Retrieval excludes YAML frontmatter, down-ranks relationship-navigation sections, requires mixed-language named-entity matches, boosts entity-title matches, and preserves original source line citations.
+- `SKILL.md` now uses progressive disclosure and is reduced below the architecture target while routing detailed rules to references.
+- Researcher manifests store only compact execution plans; shared capability definitions are not duplicated into each workspace.
+- Legacy researcher types are deprecated compatibility aliases; new configurations persist `research_design` schema v2 instead of a nominal type.
+- Enterprise integrations are declared as generic `instance_only` adapter capabilities and remain blocked until configured and available.
+- The architecture ratchet for `SKILL.md` is lowered to prevent renewed entrypoint growth.
+
+### Security
+
+- Real MCP configuration, credentials, tenant/node identifiers, private paths, enterprise taxonomies, and enterprise knowledge are prohibited from the shared package.
+- Researcher diagnostics expose readiness, reasons, and missing field names without returning connector values.
+
+### Compatibility
+
+- Existing `knowledge` and `video` profiles, legacy configs, CLI command names, and researcher-local runtime behavior remain supported.
+- Missing video or enterprise adapters are reported explicitly; they are not treated as successful execution.
+
 ## [0.7.7] - 2026-08-09
 
 ### Added

@@ -17,6 +17,16 @@ from kbm.application.researcher_registry import (
     atomic_write_json, doctor_entry, empty_registry, load_registry, register,
     registry_errors, resolve_entry, select,
 )
+from kbm.domain.researcher_types import (
+    CAPABILITIES, LEGACY_PROFILES, RESEARCHER_TYPES,
+    plan_from_legacy_profile,
+)
+from kbm.domain.research_design import (
+    OUTPUT_OPTIONS, PROCESS_OPTIONS, RESEARCH_PRESETS, SOURCE_OPTIONS,
+    plan_from_legacy_type, resolve_research_design,
+)
+from kbm.application.researcher_initializer import finalize_researcher_workspace
+from kbm.interfaces.researcher_cli import build_parser
 
 
 def emit(value: Any) -> None:
@@ -79,14 +89,63 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def cmd_types(_args: argparse.Namespace) -> None:
+    emit({"ok": True, "deprecated": True, "use": "presets", "types": [{"id": key, **value} for key, value in sorted(RESEARCHER_TYPES.items())]})
+
+
+def cmd_presets(_args: argparse.Namespace) -> None:
+    emit({
+        "ok": True,
+        "presets": [{"id": key, **value} for key, value in sorted(RESEARCH_PRESETS.items())],
+        "dimensions": {
+            "sources": sorted(SOURCE_OPTIONS), "process": sorted(PROCESS_OPTIONS),
+            "outputs": sorted(OUTPUT_OPTIONS),
+        },
+    })
+
+
+def cmd_capabilities(_args: argparse.Namespace) -> None:
+    emit({"ok": True, "capabilities": [{"id": key, **value} for key, value in sorted(CAPABILITIES.items())]})
+
+
+def resolve_args_plan(args: argparse.Namespace):
+    design = {
+        "theme": args.theme, "questions": args.question,
+        "boundaries_in": args.include_boundary, "boundaries_out": args.exclude_boundary,
+        "audience": args.audience, "time_horizon": args.time_horizon,
+        "sources": args.source, "process": args.process, "outputs": args.output,
+        "enable": args.enable, "disable": args.disable,
+    }
+    if getattr(args, "preset", None):
+        return resolve_research_design(preset=args.preset, **design)
+    if getattr(args, "researcher_type", None):
+        return plan_from_legacy_type(args.researcher_type, **design)
+    if any((args.source, args.process, args.output, args.question, args.audience, args.include_boundary, args.exclude_boundary)):
+        return resolve_research_design(**design)
+    return plan_from_legacy_profile(args.profile, theme=args.theme, enable=args.enable, disable=args.disable)
+
+
+def cmd_plan_init(args: argparse.Namespace) -> None:
+    plan = resolve_args_plan(args)
+    emit({
+        "ok": True,
+        "applied": False,
+        "researcher": {"id": args.researcher_id, "name": args.name, "theme": args.theme},
+        "workspace": str(args.workspace.expanduser().resolve()),
+        "plan": plan.to_dict(),
+    })
+
+
 def cmd_init(args: argparse.Namespace) -> None:
+    plan = resolve_args_plan(args)
+    layout_profile = plan.layout_profile
     workspace = args.workspace.expanduser().resolve()
     config = workspace / args.system_dir / "kb-config.json"
     if config.exists():
         raise ValueError("researcher_config_already_exists")
-    source_root = workspace / ("01-视频输入" if args.profile == "video" else "01-知识输入")
+    source_root = workspace / "01-知识输入"
     video_profile_args = []
-    if args.profile == "video":
+    if layout_profile == "video":
         video_profile_args = [
             "--ebooks-subdir", "视频", "--articles-subdir", "视频", "--public-accounts-subdir", "视频",
             "--topic-pages-subdir", "主题页", "--moc-subdir", "MOC",
@@ -94,15 +153,19 @@ def cmd_init(args: argparse.Namespace) -> None:
             "--feynman-subdir", "费曼解释", "--article-drafts-subdir", "文章草稿",
             "--solution-materials-subdir", "方案材料", "--reviews-subdir", "复盘",
         ]
-    source_args = (
-        ["--ebooks", str(source_root / "电子书"), "--articles", str(source_root / "文章"), "--public-accounts", str(source_root / "公众号")]
-        if args.profile == "knowledge" else []
-    )
+    source_args = []
+    if layout_profile in {"knowledge", "mixed"}:
+        if "ebook" in plan.sources:
+            source_args.extend(("--ebooks", str(source_root / "电子书")))
+        if "article" in plan.sources:
+            source_args.extend(("--articles", str(source_root / "文章")))
+        if "public-account" in plan.sources:
+            source_args.extend(("--public-accounts", str(source_root / "公众号")))
     command = [
         sys.executable, str(ROOT / "scripts" / "kb_manager.py"), "init",
         "--config", str(config), "--ai-knowledge-base", str(workspace),
         "--name", args.name, "--researcher-id", args.researcher_id,
-        "--researcher-name", args.name, "--research-domain", args.domain,
+        "--researcher-name", args.name, "--research-domain", args.theme,
         "--system-dir", args.system_dir, "--source-refinements-dir", "10-来源精炼",
         "--topic-pages-dir", "20-主题页", "--reusable-assets-dir", "30-可复用资产",
         "--outputs-dir", "40-输出",
@@ -112,91 +175,23 @@ def cmd_init(args: argparse.Namespace) -> None:
         command.append("--apply")
     result = json.loads(subprocess.check_output(command, text=True))
     if args.apply:
-        if args.profile == "video":
-            video_dirs = (
-                "01-视频输入/本地视频", "01-视频输入/链接队列", "01-视频输入/字幕",
-                "10-来源精炼/视频", "20-主题页/主题页", "20-主题页/MOC",
-                "30-可复用资产/方法", "30-可复用资产/案例", "30-可复用资产/表达", "30-可复用资产/框架",
-                "40-输出/费曼解释", "40-输出/文章草稿", "40-输出/方案材料", "40-输出/复盘",
-                "50-素材库/关键帧", "50-素材库/转录文本",
-            )
-            for relative in video_dirs:
-                (workspace / relative).mkdir(parents=True, exist_ok=True)
-            raw = json.loads(config.read_text(encoding="utf-8"))
-            raw["profile"] = "video"
-            raw["source_libraries"] = {
-                "videos": str(source_root / "本地视频"),
-                "video_links": str(source_root / "链接队列"),
-                "transcripts": str(source_root / "字幕"),
-            }
-            raw["source_adapters"] = {"video": {"enabled": False, "status": "adapter_not_installed"}}
-            raw["mapping"]["media_assets"] = "50-素材库"
-            raw["source_refinement_subdirs"] = {"videos": "视频"}
-            raw["topic_page_subdirs"] = {"pages": "主题页", "moc": "MOC"}
-            raw["reusable_asset_subdirs"] = {"methods": "方法", "cases": "案例", "expressions": "表达", "frameworks": "框架"}
-            raw["output_subdirs"] = {"feynman": "费曼解释", "article_drafts": "文章草稿", "solution_materials": "方案材料", "reviews": "复盘"}
-            atomic_write_json(config, raw)
+        finalize_researcher_workspace(config, workspace, plan, args.disable)
         registry = load_registry(args.registry, allow_missing=args.create_registry)
         updated, entry = register(registry, config)
         atomic_write_json(args.registry, updated)
     else:
-        entry = {"id": args.researcher_id, "name": args.name, "workspace": str(workspace), "config": str(config), "profile": args.profile}
-    emit({"ok": True, "applied": args.apply, "researcher": entry, "initialization": result})
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    p = sub.add_parser("registry-init")
-    p.add_argument("--registry", required=True, type=Path)
-    p.add_argument("--shared-methods", type=Path)
-    p.add_argument("--apply", action="store_true")
-    p.set_defaults(func=cmd_registry_init)
-
-    p = sub.add_parser("register")
-    p.add_argument("--registry", required=True, type=Path)
-    p.add_argument("--config", required=True, type=Path)
-    p.add_argument("--create-registry", action="store_true")
-    p.add_argument("--apply", action="store_true")
-    p.set_defaults(func=cmd_register)
-
-    p = sub.add_parser("list")
-    p.add_argument("--registry", required=True, type=Path)
-    p.set_defaults(func=cmd_list)
-
-    p = sub.add_parser("doctor")
-    p.add_argument("--registry", required=True, type=Path)
-    p.add_argument("--researcher-id")
-    p.set_defaults(func=cmd_doctor)
-
-    p = sub.add_parser("show")
-    p.add_argument("--registry", required=True, type=Path)
-    p.add_argument("--researcher-id")
-    p.set_defaults(func=cmd_show)
-
-    p = sub.add_parser("select")
-    p.add_argument("--registry", required=True, type=Path)
-    p.add_argument("--researcher-id", required=True)
-    p.add_argument("--apply", action="store_true")
-    p.set_defaults(func=cmd_select)
-
-    p = sub.add_parser("init")
-    p.add_argument("--registry", required=True, type=Path)
-    p.add_argument("--workspace", required=True, type=Path)
-    p.add_argument("--researcher-id", required=True)
-    p.add_argument("--name", required=True)
-    p.add_argument("--domain", required=True)
-    p.add_argument("--profile", choices=("knowledge", "video"), default="knowledge")
-    p.add_argument("--system-dir", default="00-系统")
-    p.add_argument("--create-registry", action="store_true")
-    p.add_argument("--apply", action="store_true")
-    p.set_defaults(func=cmd_init)
-    return parser
+        entry = {"id": args.researcher_id, "name": args.name, "workspace": str(workspace), "config": str(config), "profile": layout_profile}
+    emit({"ok": True, "applied": args.apply, "researcher": entry, "plan": plan.to_dict(), "initialization": result})
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    handlers = {
+        "types": cmd_types, "presets": cmd_presets, "capabilities": cmd_capabilities,
+        "registry-init": cmd_registry_init, "register": cmd_register, "list": cmd_list,
+        "doctor": cmd_doctor, "show": cmd_show, "select": cmd_select,
+        "plan-init": cmd_plan_init, "init": cmd_init,
+    }
+    args = build_parser(handlers).parse_args()
     try:
         args.func(args)
     except (ValueError, OSError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:

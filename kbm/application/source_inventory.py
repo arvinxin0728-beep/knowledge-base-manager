@@ -7,6 +7,7 @@ import json
 import re
 import unicodedata
 from collections import defaultdict
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -14,6 +15,34 @@ from kbm.domain.markdown import collect_markdown_files, markdown_title, split_fr
 from kbm.platform.paths import kb_path, system_active_file
 
 SOURCE_EXTS = {".md", ".markdown", ".txt", ".html", ".htm", ".docx", ".epub", ".pdf"}
+
+
+def source_is_excluded(cfg: dict[str, Any], path: Path, root: Path) -> bool:
+    """Return whether a source matches an instance-configured relative glob."""
+    patterns = cfg.get("pipeline", {}).get("source_exclude_globs", [])
+    if not isinstance(patterns, list):
+        return False
+    relative = path.relative_to(root).as_posix()
+    return any(isinstance(pattern, str) and fnmatch(relative, pattern) for pattern in patterns)
+
+
+def merge_source_attribution(source: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing durable attribution from a Markdown source frontmatter."""
+    if source.suffix.lower() not in {".md", ".markdown"} or not source.is_file():
+        return metadata
+    source_meta, _body = split_frontmatter(source.read_text(encoding="utf-8", errors="replace"))
+    aliases = {
+        "account": ("account",), "author": ("author",),
+        "published_at": ("published_at", "published"), "saved_at": ("saved_at", "saved"),
+        "url": ("url", "source_url"),
+    }
+    merged = dict(metadata)
+    for target, candidates in aliases.items():
+        if not merged.get(target):
+            merged[target] = next((source_meta[key] for key in candidates if source_meta.get(key)), "")
+    if not merged.get("account") and str(source_meta.get("source") or "") in {"微信公众号", "public_account"}:
+        merged["account"] = source_meta.get("author") or ""
+    return merged
 
 
 def _inside(path: Path, root: Path) -> bool:
@@ -62,7 +91,12 @@ def source_files(cfg: dict[str, Any]) -> list[Path]:
             continue
         root = Path(raw).expanduser()
         if root.exists():
-            files.extend(path.resolve() for path in root.rglob("*") if path.is_file() and path.suffix.lower() in SOURCE_EXTS)
+            files.extend(
+                path.resolve() for path in root.rglob("*")
+                if path.is_file()
+                and path.suffix.lower() in SOURCE_EXTS
+                and not source_is_excluded(cfg, path, root)
+            )
     return sorted(set(files), key=str)
 
 

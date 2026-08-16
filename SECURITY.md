@@ -4,7 +4,9 @@
 
 | Version | Supported |
 |---|---|
-| 0.1.x beta | Yes |
+| 0.8.x beta | Yes |
+| 0.7.x beta | Security fixes only |
+| < 0.7 | No |
 
 ## Privacy and Local Data Boundary
 
@@ -13,6 +15,8 @@
 The deterministic scripts in this package do not intentionally upload user files to external services. However, when an agent platform uses this skill, that platform may send prompts, excerpts, paths, or generated content to its configured model provider. Users and integrators are responsible for understanding the privacy model of the agent platform they run this package inside.
 
 Do not process confidential, regulated, copyrighted, or third-party private materials unless you have permission and understand the data-handling boundary of your runtime.
+
+MCP, DingTalk, Feishu, and other enterprise connector values must remain in one researcher instance. The shared package may contain only generic adapter contracts and synthetic fixtures. Store credentials through environment or secret-store references; do not commit instantiated configs, tenant/node identifiers, private paths, or enterprise knowledge.
 
 ## High-Risk Content
 

@@ -45,7 +45,29 @@ Do not silently share these across researchers:
 
 Cross-researcher knowledge transfer is allowed only through explicit import, citation, or method extraction. A researcher may cite another researcher's output as an external source, but it must be marked as such and should not count as independent primary evidence.
 
-## Researcher initialization contract
+## Researcher design contract
+
+A researcher is not a nominal type. Model these independent dimensions:
+
+- identity: stable ID, name, owner, language, and isolated workspace;
+- scope: theme, research questions, included/excluded boundaries, audience, and time horizon;
+- sources: article, public account, ebook, video, transcript, or future adapters;
+- process: active reading, synthesis, verification, role enablement, or another procedure;
+- outputs: explanation, article, script, report, decision memo, SOP, or training module;
+- capabilities: executable contracts derived from the selected sources, process, and outputs;
+- governance: evidence, privacy, review, and publication policy.
+
+A preset is only an editable bundle of defaults. It must not become the researcher's identity, an exclusive class, or a new implementation hierarchy. For example, an industry theme may use articles and video, perform fact verification and role enablement, then produce both a report and an SOP.
+
+Preview before writing:
+
+```bash
+python3 scripts/kb_researcher.py presets
+python3 scripts/kb_researcher.py capabilities
+python3 scripts/kb_researcher.py plan-init --workspace <path> --researcher-id <id> --name <name> --theme <theme> --preset <preset> [--source <source>] [--process <process>] [--output <output>]
+```
+
+Legacy `--profile knowledge|video` and `--type` remain supported as deprecated aliases. They resolve into the same multidimensional plan and retain an explicit deprecation marker. New configs persist `research_design.schema_version: 2` and do not write `researcher.type`.
 
 When creating a researcher, record:
 
@@ -57,13 +79,21 @@ researcher:
   role: researcher
   owner:
   language:
-  source_libraries:
-  ai_knowledge_base:
   shared_methods:
   allowed_cross_researcher_imports:
-  default_output_channels:
-  evidence_policy:
-  review_cadence:
+research_design:
+  schema_version: 2
+  preset: general-knowledge
+  scope:
+    theme:
+    questions: []
+    boundaries: {included: [], excluded: []}
+    audience: []
+    time_horizon: continuous
+  sources: [article, public-account, ebook]
+  process: [active-reading, topic-synthesis]
+  outputs: [feynman, article]
+  governance_policy: research-standard
 ```
 
 Minimum rule: one researcher must have one primary `ai_knowledge_base` and one system config. Multiple researchers must not write to the same `00-system/active` files.
@@ -123,14 +153,9 @@ Use a registry when multiple researchers exist:
 6. When a method improvement is discovered in one researcher, update the shared skill/reference only after it has a reproducible closed loop or clear general rule.
 7. Record cross-researcher imports in the receiving researcher's source refinement or evidence field.
 
-## Common researcher roles
+## Preset rule
 
-- domain researcher: follows a stable topic such as AI knowledge systems,餐饮行业, sales operations, education, or product strategy
-- project researcher: supports a time-bound project, presentation, paper, report, or consulting engagement
-- publication researcher: prepares evidence-backed public outputs for a channel
-- learning researcher: helps a student learn a course, build notes, and produce assignments or presentations
-
-Roles affect source policies, output types, and review cadence, but not the core four-layer knowledge flow.
+Presets may cover common starting situations such as general knowledge, publication, project decision, industry intelligence, learning, role enablement, or video content. Their names are conveniences only. Every preset expands into visible dimensions, every dimension can be extended, and custom designs require no preset.
 
 ## Completion checks
 

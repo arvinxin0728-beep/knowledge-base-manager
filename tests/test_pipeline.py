@@ -99,6 +99,35 @@ def test_full_lifecycle_and_idempotent_commit() -> None:
         temp.cleanup()
 
 
+def test_commit_preserves_source_frontmatter_attribution() -> None:
+    temp, config, sources = make_case()
+    root = Path(temp.name)
+    try:
+        article = next(sources.glob("*.md"))
+        article.write_text(
+            "---\nauthor: Source Author\nsource: 微信公众号\nurl: https://example.com/a\n"
+            "published: 2026-08-14 07:58\nsaved: 2026-08-14 08:44:10\n---\n\n# Article\n\n"
+            + "Evidence-based knowledge processing. " * 30,
+            encoding="utf-8",
+        )
+        invoke(config, "discover"); invoke(config, "extract")
+        job = invoke(config, "claim", "--worker", "attribution")["jobs"][0]
+        note, metadata = write_refinement(root)
+        metadata_value = json.loads(metadata.read_text(encoding="utf-8"))
+        metadata_value.pop("saved_at")
+        metadata.write_text(json.dumps(metadata_value), encoding="utf-8")
+        invoke(config, "submit", "--job-id", job["job_id"], "--lease-token", job["lease_token"], "--refinement", str(note), "--metadata", str(metadata))
+        committed = invoke(config, "commit", "--job-id", job["job_id"])
+        output = Path(committed["output_file"]).read_text(encoding="utf-8")
+        assert 'account: "Source Author"' in output
+        assert 'author: "Source Author"' in output
+        assert 'published_at: "2026-08-14"' in output
+        assert 'saved_at: "2026-08-14"' in output
+        assert 'url: "https://example.com/a"' in output
+    finally:
+        temp.cleanup()
+
+
 def test_failed_refinement_can_retry_without_reextracting() -> None:
     temp, config, _sources = make_case()
     try:
@@ -157,6 +186,22 @@ def test_thousand_source_discovery() -> None:
         assert result["inserted"] == 1000
         assert invoke(config, "status")["total"] == 1000
         assert invoke(config, "discover")["unchanged"] == 1000
+    finally:
+        temp.cleanup()
+
+
+def test_discovery_applies_instance_source_exclusions() -> None:
+    temp, config, sources = make_case()
+    try:
+        (sources / ".agents").mkdir()
+        (sources / ".agents" / "SKILL.md").write_text("operations", encoding="utf-8")
+        (sources / "library_2026-08-11.md").write_text("inventory", encoding="utf-8")
+        cfg = json.loads(config.read_text())
+        cfg["pipeline"]["source_exclude_globs"] = [".agents/**", "library_*.md"]
+        config.write_text(json.dumps(cfg), encoding="utf-8")
+        result = invoke(config, "discover")
+        assert result["inserted"] == 1
+        assert invoke(config, "status")["total"] == 1
     finally:
         temp.cleanup()
 

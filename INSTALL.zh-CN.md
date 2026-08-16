@@ -104,12 +104,12 @@ python3 scripts/kb_manager.py quality-gate \
 
 ```bash
 python3 scripts/kb_manager.py package-lint --strict
-python3 tests/e2e_new_user.py
-python3 tests/test_kb_manager.py
-python3 tests/test_pipeline.py
+python3 scripts/architecture_check.py --strict
+python3 tests/run_all.py
+python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
 ```
 
-全部通过后，才可以视为满足 beta 发布门槛。
+还必须确认四研究员合成验收通过、工作区干净、发布包不含个人路径、MCP 配置、凭证、节点 ID 或企业知识。全部通过后，才可以视为满足 `v0.8.0` Beta 发布门槛。
 
 ## 注意事项
 
