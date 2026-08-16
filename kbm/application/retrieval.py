@@ -88,9 +88,9 @@ def _title(lines: list[str], fallback: str) -> str:
     return fallback
 
 
-def _segments(lines: list[str], max_chars: int = 1400) -> list[tuple[int, int, str, str]]:
+def _segments(lines: list[str], max_chars: int = 1400, line_offset: int = 0) -> list[tuple[int, int, str, str]]:
     segments: list[tuple[int, int, str, str]] = []
-    start = 1
+    start = 1 + line_offset
     heading = ""
     buffer: list[str] = []
 
@@ -101,7 +101,7 @@ def _segments(lines: list[str], max_chars: int = 1400) -> list[tuple[int, int, s
             segments.append((start, end, heading, content))
         buffer = []
 
-    for number, line in enumerate(lines, 1):
+    for number, line in enumerate(lines, 1 + line_offset):
         is_heading = line.startswith("#") and line.lstrip("#").startswith(" ")
         projected = sum(len(item) + 1 for item in buffer) + len(line)
         if buffer and (is_heading or projected > max_chars):
@@ -110,7 +110,7 @@ def _segments(lines: list[str], max_chars: int = 1400) -> list[tuple[int, int, s
         if is_heading:
             heading = line.lstrip("# ").strip()
         buffer.append(line)
-    flush(len(lines))
+    flush(len(lines) + line_offset)
     return segments
 
 
@@ -121,10 +121,17 @@ def build_rows(cfg: dict[str, Any], layers: Iterable[str] = ()) -> list[dict[str
     for layer, path in discover_artifacts(cfg, layers):
         text = path.read_text(encoding="utf-8", errors="ignore")
         lines = text.splitlines()
+        body_lines = lines
+        line_offset = 0
+        if lines and lines[0].strip() == "---":
+            closing = next((index for index, line in enumerate(lines[1:], 1) if line.strip() == "---"), None)
+            if closing is not None:
+                line_offset = closing + 1
+                body_lines = lines[line_offset:]
         relative = str(path.resolve().relative_to(base))
         artifact_id = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:20]
-        title = _title(lines, path.stem)
-        for start, end, heading, content in _segments(lines):
+        title = _title(body_lines, path.stem)
+        for start, end, heading, content in _segments(body_lines, line_offset=line_offset):
             chunk_id = hashlib.sha256(f"{relative}:{start}:{end}:{content}".encode("utf-8")).hexdigest()[:24]
             rows.append({
                 "chunk_id": chunk_id, "artifact_id": artifact_id, "layer": layer,

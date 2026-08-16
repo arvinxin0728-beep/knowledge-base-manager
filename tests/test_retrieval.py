@@ -64,3 +64,29 @@ def test_query_can_be_limited_to_one_knowledge_layer() -> None:
         search(config, "rebuild", "--apply")
         assert search(config, "query", "--query", "evidence citation", "--layer", "output")["result_count"] == 1
         assert search(config, "query", "--query", "evidence citation", "--layer", "topic_page")["result_count"] == 0
+
+
+def test_frontmatter_links_do_not_pollute_ranking_or_snippets() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw); kb = root / "kb"; notes = kb / "10"; notes.mkdir(parents=True)
+        (notes / "irrelevant.md").write_text(
+            "---\nrelated_topics:\n  - personal knowledge recovery\n---\n# Cash Register\n\nRestaurant payment operations.\n",
+            encoding="utf-8",
+        )
+        (notes / "relevant.md").write_text(
+            "---\ntags: [research]\n---\n# Recovery\n\nPersonal knowledge recovery requires durable checkpoints.\n",
+            encoding="utf-8",
+        )
+        config = root / "config.json"
+        config.write_text(json.dumps({
+            "version": 1, "name": "Frontmatter Test", "ai_knowledge_base": str(kb), "source_libraries": {},
+            "mapping": {"system": "00", "source_refinements": "10", "topic_pages": "20", "reusable_assets": "30", "outputs": "40"},
+            "pipeline": {"runtime_storage": "legacy", "artifact_retention_days": 7},
+        }), encoding="utf-8")
+        search(config, "rebuild", "--apply")
+        result = search(config, "query", "--query", "personal knowledge recovery")
+        assert result["result_count"] == 1
+        assert result["results"][0]["title"] == "Recovery"
+        assert result["results"][0]["citation"]["start_line"] == 4
+        assert result["results"][0]["citation"]["end_line"] >= result["results"][0]["citation"]["start_line"]
+        assert "related_topics" not in result["results"][0]["snippet"]
