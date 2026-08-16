@@ -6,6 +6,34 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-16
+
+### Added
+
+- Composable researcher types and dependency-resolved capability plans, including a portable role-enablement researcher.
+- Executable capability contracts for bundled code, model instructions, and instance-provided adapters.
+- Instance-aware, redacted adapter readiness diagnostics for video and enterprise document connectors.
+- Privacy gates that reject embedded connector values, private paths, raw secrets, and enterprise markers in release packages.
+- Four-researcher release acceptance matrix covering knowledge, video/content, industry, and role enablement.
+- Dedicated application modules for evidence intake, source indexing, mechanical output quality, and editorial quality.
+
+### Changed
+
+- `SKILL.md` now uses progressive disclosure and is reduced below the architecture target while routing detailed rules to references.
+- Researcher manifests store only compact execution plans; shared capability definitions are not duplicated into each workspace.
+- Enterprise integrations are declared as generic `instance_only` adapter capabilities and remain blocked until configured and available.
+- The architecture ratchet for `SKILL.md` is lowered to prevent renewed entrypoint growth.
+
+### Security
+
+- Real MCP configuration, credentials, tenant/node identifiers, private paths, enterprise taxonomies, and enterprise knowledge are prohibited from the shared package.
+- Researcher diagnostics expose readiness, reasons, and missing field names without returning connector values.
+
+### Compatibility
+
+- Existing `knowledge` and `video` profiles, legacy configs, CLI command names, and researcher-local runtime behavior remain supported.
+- Missing video or enterprise adapters are reported explicitly; they are not treated as successful execution.
+
 ## [0.7.7] - 2026-08-09
 
 ### Added

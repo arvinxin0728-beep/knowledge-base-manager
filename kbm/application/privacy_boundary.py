@@ -72,4 +72,8 @@ def validate_instance_connector_config(config: dict[str, Any]) -> list[str]:
             if normalized in {"access_token", "api_key", "app_secret", "client_secret"}:
                 if isinstance(value, str) and not _is_placeholder(value):
                     errors.append(f"raw_secret_forbidden:{connector}:{key}")
+            if normalized.endswith("secret_ref") and (
+                not isinstance(value, str) or not value.startswith(("${", "env:", "secret:", "<"))
+            ):
+                errors.append(f"secret_reference_required:{connector}:{key}")
     return errors

@@ -44,6 +44,11 @@ RESEARCHER_TYPES: dict[str, dict[str, Any]] = {
         "capabilities": ["source.ebook", "research.active-reading", "research.topic-synthesis", "output.feynman"],
         "governance_policy": "learning-light",
     },
+    "enablement-researcher": {
+        "name": "岗位赋能研究员", "purpose": "把业务与产品知识转化为面向不同岗位的可执行知识",
+        "capabilities": ["research.active-reading", "research.topic-synthesis", "research.fact-verification", "research.role-enablement", "asset.product-knowledge-card", "output.operations-sop", "output.training-module"],
+        "governance_policy": "evidence-strict",
+    },
 }
 
 LEGACY_PROFILES = {

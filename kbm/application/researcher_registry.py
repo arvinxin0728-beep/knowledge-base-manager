@@ -12,6 +12,7 @@ from typing import Any
 
 from kbm.domain.researcher import ResearcherIdentity, researcher_from_config
 from kbm.application.privacy_boundary import validate_instance_connector_config
+from kbm.application.adapter_readiness import available_adapters_from_env, resolve_instance_execution
 from kbm.platform.config import load_config, validate_config
 from kbm.platform.paths import local_runtime_dir, system_dir
 
@@ -181,6 +182,13 @@ def doctor_entry(entry: dict[str, Any]) -> DoctorResult:
             for error in validate_instance_connector_config(cfg)
         )
         identity = researcher_from_config(cfg)
+        enabled_capabilities = cfg.get("capabilities", {}).get("enabled", [])
+        capability_execution = (
+            resolve_instance_execution(
+                enabled_capabilities, cfg, available_adapters=available_adapters_from_env()
+            )
+            if enabled_capabilities else {"ready": True, "steps": [], "blockers": []}
+        )
         checks.update({
             "config_valid": not config_issues,
             "config_issues": config_issues,
@@ -189,6 +197,8 @@ def doctor_entry(entry: dict[str, Any]) -> DoctorResult:
             "system_exists": system_dir(cfg).is_dir(),
             "runtime_storage": cfg.get("pipeline", {}).get("runtime_storage", "legacy"),
             "runtime_path": str(local_runtime_dir(cfg)) if cfg.get("pipeline", {}).get("runtime_storage") == "local" else str(system_dir(cfg) / "runtime"),
+            "capability_execution_ready": capability_execution["ready"],
+            "capability_execution_blockers": capability_execution["blockers"],
         })
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         checks["load_error"] = str(exc)

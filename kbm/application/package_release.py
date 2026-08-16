@@ -35,12 +35,29 @@ def source_content_hash(tracked: list[Path]) -> str:
     return digest.hexdigest()
 
 
-def package_lint(skill_root: Path, *, release_version: str = "v0.7.7") -> dict[str, Any]:
+def package_lint(skill_root: Path, *, release_version: str = "v0.8.0") -> dict[str, Any]:
     issues: list[dict[str, str]] = []
     files = sorted((path for path in skill_root.rglob("*") if path.is_file()), key=str)
     for relative in REQUIRED_RELEASE_FILES:
         if not (skill_root / relative).exists():
             issues.append({"file": relative, "issue": "missing_release_file"})
+    if release_version == "v0.8.0":
+        for relative in (".github/workflows/ci.yml", "kbm/__init__.py"):
+            if not (skill_root / relative).exists():
+                issues.append({"file": relative, "issue": "missing_release_file"})
+        ci_text = (skill_root / ".github/workflows/ci.yml").read_text(encoding="utf-8", errors="ignore") if (skill_root / ".github/workflows/ci.yml").exists() else ""
+        if "pull_request_target" in ci_text:
+            issues.append({"file": ".github/workflows/ci.yml", "issue": "unsafe_pull_request_target"})
+        if "contents: read" not in ci_text:
+            issues.append({"file": ".github/workflows/ci.yml", "issue": "ci_permissions_not_read_only"})
+        if "${{ secrets." in ci_text:
+            issues.append({"file": ".github/workflows/ci.yml", "issue": "ci_must_not_read_secrets"})
+        init_text = (skill_root / "kbm/__init__.py").read_text(encoding="utf-8", errors="ignore") if (skill_root / "kbm/__init__.py").exists() else ""
+        if '__version__ = "0.8.0"' not in init_text:
+            issues.append({"file": "kbm/__init__.py", "issue": "release_version_mismatch"})
+        changelog_text = (skill_root / "CHANGELOG.md").read_text(encoding="utf-8", errors="ignore") if (skill_root / "CHANGELOG.md").exists() else ""
+        if "## [0.8.0]" not in changelog_text:
+            issues.append({"file": "CHANGELOG.md", "issue": "release_changelog_missing"})
     readme = skill_root / "README.md"
     if not readme.exists():
         issues.append({"file": "README.md", "issue": "missing_chinese_readme"})

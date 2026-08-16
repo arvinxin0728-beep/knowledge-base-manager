@@ -41,8 +41,16 @@ def test_raw_connector_secret_is_rejected() -> None:
     assert errors == ["raw_secret_forbidden:example:client_secret"]
 
 
+def test_secret_ref_must_be_an_external_reference() -> None:
+    errors = validate_instance_connector_config({
+        "connectors": {"example": {"secret_ref": "plaintext-secret"}}
+    })
+    assert errors == ["secret_reference_required:example:secret_ref"]
+
+
 if __name__ == "__main__":
     test_portable_package_rejects_private_paths_connector_values_and_enterprise_markers()
     test_generic_connector_contract_and_secret_references_are_portable()
     test_raw_connector_secret_is_rejected()
+    test_secret_ref_must_be_an_external_reference()
     print("ok")

@@ -52,3 +52,12 @@ def test_enterprise_connectors_are_generic_instance_only_adapters() -> None:
     }
     assert {item["status"] for item in connector_steps.values()} == {"blocked_adapter_required"}
     assert all(item["execution_mode"] == "adapter" for item in connector_steps.values())
+
+
+def test_enablement_researcher_is_portable_role_preset() -> None:
+    plan = resolve_researcher_plan("enablement-researcher")
+    assert {
+        "research.role-enablement", "asset.product-knowledge-card",
+        "output.operations-sop", "output.training-module",
+    } <= set(plan.capabilities)
+    assert plan.unavailable == ()
