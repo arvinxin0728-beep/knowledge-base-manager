@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from kbm.domain.researcher_types import (
-    CORE_CAPABILITIES, plan_from_legacy_profile, resolve_researcher_plan,
+    CAPABILITIES, CORE_CAPABILITIES, plan_from_legacy_profile, resolve_researcher_plan,
 )
 
 
@@ -37,3 +37,12 @@ def test_core_capability_cannot_be_disabled() -> None:
         assert "cannot_disable_core_capability" in str(exc)
     else:
         raise AssertionError("core capability disable should fail")
+
+
+def test_enterprise_connectors_are_generic_instance_only_adapters() -> None:
+    plan = resolve_researcher_plan(
+        "industry-researcher", enable=["integration.dingtalk", "integration.feishu"]
+    )
+    assert {item["id"] for item in plan.unavailable} == {"integration.dingtalk", "integration.feishu"}
+    assert CAPABILITIES["integration.dingtalk"]["config_scope"] == "instance_only"
+    assert CAPABILITIES["integration.feishu"]["config_scope"] == "instance_only"

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from kbm.domain.researcher import ResearcherIdentity, researcher_from_config
+from kbm.application.privacy_boundary import validate_instance_connector_config
 from kbm.platform.config import load_config, validate_config
 from kbm.platform.paths import local_runtime_dir, system_dir
 
@@ -102,6 +103,10 @@ def entry_from_config(config_path: Path, *, status: str = "active") -> dict[str,
     resolved = config_path.expanduser().resolve()
     cfg = load_config(resolved)
     errors = validate_config(cfg)
+    errors.extend(
+        {"field": "connectors", "error": error}
+        for error in validate_instance_connector_config(cfg)
+    )
     if errors:
         raise ValueError(json.dumps({"config_errors": errors}, ensure_ascii=False))
     identity = researcher_from_config(cfg)
@@ -171,6 +176,10 @@ def doctor_entry(entry: dict[str, Any]) -> DoctorResult:
     try:
         cfg = load_config(config_path)
         config_issues = validate_config(cfg)
+        config_issues.extend(
+            {"field": "connectors", "error": error}
+            for error in validate_instance_connector_config(cfg)
+        )
         identity = researcher_from_config(cfg)
         checks.update({
             "config_valid": not config_issues,

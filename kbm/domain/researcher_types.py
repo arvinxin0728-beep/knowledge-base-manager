@@ -35,6 +35,8 @@ CAPABILITIES: dict[str, dict[str, Any]] = {
     "output.research-report": {"category": "output", "requires": ["research.fact-verification"], "availability": "available"},
     "output.decision-memo": {"category": "output", "requires": ["research.fact-verification"], "availability": "available"},
     "integration.obsidian": {"category": "integration", "requires": ["core.workspace-isolation"], "availability": "available"},
+    "integration.dingtalk": {"category": "integration", "requires": ["core.workspace-isolation"], "availability": "adapter_required", "config_scope": "instance_only"},
+    "integration.feishu": {"category": "integration", "requires": ["core.workspace-isolation"], "availability": "adapter_required", "config_scope": "instance_only"},
 }
 
 RESEARCHER_TYPES: dict[str, dict[str, Any]] = {

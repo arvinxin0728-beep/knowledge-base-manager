@@ -6,6 +6,8 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from kbm.application.privacy_boundary import scan_portable_package
+
 
 REQUIRED_RELEASE_FILES = ("LICENSE", "CHANGELOG.md", "SECURITY.md", "INSTALL.zh-CN.md", "ARCHITECTURE.md")
 REQUIRED_README_TERMS = (
@@ -72,6 +74,8 @@ def package_lint(skill_root: Path, *, release_version: str = "v0.7.7") -> dict[s
                 issues.append({"file": relative, "issue": "fixture_contains_absolute_user_path"})
             if relative == "SKILL.md" and "Current 8XX implementation" in text:
                 issues.append({"file": relative, "issue": "main_skill_contains_user_specific_mapping"})
+    privacy = scan_portable_package(skill_root)
+    issues.extend(privacy["issues"])
     return {"passed": not issues, "files_scanned": len(files), "issue_count": len(issues), "issues": issues}
 
 

@@ -110,6 +110,27 @@ def test_new_type_initialization_writes_resolved_manifest() -> None:
         assert config["resolved_manifest"]["unavailable"]
 
 
+def test_doctor_rejects_raw_connector_secrets_in_one_researcher_instance() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        registry = root / "registry.json"
+        run("registry-init", "--registry", str(registry), "--apply")
+        run(
+            "init", "--registry", str(registry), "--workspace", str(root / "private"),
+            "--researcher-id", "private", "--name", "Private", "--domain", "private", "--apply",
+        )
+        config_path = root / "private" / "00-系统" / "kb-config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config["connectors"] = {"example": {"client_secret": "plaintext-secret"}}
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        failed = subprocess.run(
+            ["python3", str(CLI), "doctor", "--registry", str(registry)],
+            text=True, capture_output=True,
+        )
+        assert failed.returncode != 0
+        assert "raw_secret_forbidden" in failed.stdout
+
+
 if __name__ == "__main__":
     test_registry_init_register_select_and_doctor()
     test_registry_rejects_shared_workspace_and_duplicate_identity()
