@@ -38,7 +38,8 @@ Preview high-cost or multi-stage work, record checkpoints, and resume instead of
 | Initialize, select, or coordinate researchers | `references/researcher-system.md`, `references/setup-and-config.md` | Compose a research design, preview its plan, then create or map one isolated workspace. |
 | Add a preset, capability, dependency, or adapter | `references/capability-contracts.md` | Keep dimensions independent; define an executable contract and validate readiness. |
 | Add MCP, DingTalk, Feishu, or enterprise integration | `references/privacy-and-enterprise-connectors.md` | Keep contracts portable and all values/data instance-local. |
-| Process unread or new sources | `references/pipeline.md`, `references/reading-and-refinement.md` | Discover, prepare, extract, claim, refine, submit, and commit a bounded batch. |
+| Process unread or new sources | `references/pipeline.md`, `references/model-transactions-and-retrieval.md` | Run a bounded batch; record model attempts and snapshots transactionally. |
+| Search durable knowledge | `references/model-transactions-and-retrieval.md` | Rebuild the device-local index and return ranked, line-addressable citations. |
 | Read or refine one book/article/source | `references/reading-and-refinement.md` | Perform active reading and create one traceable durable refinement. |
 | Handle PDF/OCR/unsupported or uncertain extraction | `references/source-intake-and-extraction.md` | Validate readability before refinement. |
 | Audit source credibility or freshness | `references/source-quality-and-weighting.md` | Weight evidence and record limitations. |
@@ -167,7 +168,7 @@ init  discover  prepare  extract  claim  submit  commit
 commit-ready  fail  retry  adopt-existing  status
 storage-status  migrate-runtime  retire-legacy-runtime  cleanup
 ```
-
+Use `scripts/kb_model.py` for model-run start/complete/fail/status and `scripts/kb_search.py` for citation-first `rebuild/query/status`.
 Use `scripts/kb_researcher.py` for researcher registry, selection, composable initialization, capability plans, and redacted readiness diagnostics:
 
 ```text
@@ -178,7 +179,6 @@ presets  types(deprecated)  capabilities  plan-init  init
 Use `scripts/obsidian_linker.py`, `scripts/ebook_probe.py`, and `scripts/official_account_library.rb` for their declared deterministic modules.
 
 ## Completion protocol
-
 Before declaring work complete:
 
 1. Confirm the intended researcher/workspace received all writes.
@@ -191,7 +191,7 @@ Before declaring work complete:
 
 ## Reference index
 
-- Setup and system: `references/setup-and-config.md`, `references/researcher-system.md`, `references/schema.md`, `references/pipeline.md`
+- Setup and system: `references/setup-and-config.md`, `references/researcher-system.md`, `references/schema.md`, `references/pipeline.md`, `references/model-transactions-and-retrieval.md`
 - Capability and privacy: `references/capability-contracts.md`, `references/privacy-and-enterprise-connectors.md`
 - Reading and evidence: `references/reading-and-refinement.md`, `references/source-intake-and-extraction.md`, `references/source-quality-and-weighting.md`, `references/evidence-gap-and-bounded-fill.md`, `references/verification.md`
 - Synthesis and outputs: `references/asset-output-matrix.md`, `references/output-rules.md`, `references/feynman-template.md`, `references/editorial-quality-and-output-maturity.md`, `references/publishable-article-workflow.md`, `references/publication-candidate-handoff.md`, `references/output-evaluation.md`

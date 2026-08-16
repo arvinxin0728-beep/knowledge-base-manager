@@ -24,7 +24,7 @@
 ### 用户工作流
 
 1. 新增来源到原文库（电子书 / 公众号 / 文章 / 网页）
-2. 运行管线：`kb_pipeline.py discover → extract → claim → submit → commit`
+2. 运行管线：`kb_pipeline.py discover → extract → claim`，用 `kb_model.py` 记录模型运行，再 `submit → commit`
 3. Gate-10 检查精炼质量（结构完整性、内容 integrity、批次重复率）
 4. `kb_manager.py promote` 做主题聚类与 5 维度评分
 5. 评分 ≥ 4 的簇创建主题页
@@ -38,7 +38,7 @@
 |---|---|---|
 | **人（知识工作者）** | 收集来源、审核推广、验证事实、决策产出 | 整理源文件、审核 promotion-review.md、运行 verify-claim |
 | **Codex（AI 代理）** | 阅读精炼、主题合成、资产提取、输出起草 | SKILL.md 入口 + references/ 指令集 |
-| **确定性脚本** | 目录初始化、索引管理、聚类打分、质量检查 | kb_manager.py、kb_pipeline.py、obsidian_linker.py |
+| **确定性脚本** | 目录初始化、事务、模型账本、检索、聚类和质量检查 | kb_manager.py、kb_pipeline.py、kb_model.py、kb_search.py |
 
 ---
 
@@ -50,7 +50,7 @@
 
 - `SKILL.md` 同时承担意图路由、流程说明、质量规则、命令手册和发布规范。
 - `scripts/kb_manager.py` 同时承担配置、持久化、审核、推广、治理、发布检查和 CLI 注册。
-- `scripts/kb_pipeline.py` 同时承担运行时存储、事务状态机、提取、质量门调用和迁移。
+- `scripts/kb_pipeline.py` 仍承担来源事务、提取、质量门调用和迁移；模型运行账本与检索已经拆为独立应用模块和控制面。
 - references 已按场景拆分，但尚未全部映射到稳定的代码能力模块。
 
 因此目标不是拆成微服务，而是把现有系统演进为一个有明确边界的模块化单体。

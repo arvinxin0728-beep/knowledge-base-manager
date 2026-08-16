@@ -51,13 +51,13 @@ For every claimed job:
 2. Follow `references/reading-and-refinement.md`.
 3. Write a refinement Markdown file with every required heading.
 4. Write metadata JSON with `title`, `topics`, `fact_risk`, and `fact_check_required`.
-5. Submit the result before the lease expires:
+5. Record model execution with `model-transactions-and-retrieval.md`, or use the compatible direct submission below.
+6. Submit the result before the lease expires:
 
 ```bash
 python3 scripts/kb_pipeline.py --config <config> submit \
   --job-id <id> --lease-token <token> \
   --refinement <note.md> --metadata <metadata.json>
-```
 ```
 
 > **Gate-10 enforcement**: `submit` and `adopt-existing` automatically run `check-refinement` before accepting. Blocked-by-gate10 errors require fixing the refinement before retry.

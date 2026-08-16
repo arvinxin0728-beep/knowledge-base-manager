@@ -40,6 +40,7 @@ def config_defaults() -> dict[str, Any]:
         "promotion_rules": {"min_sources_for_topic": 3, "allow_user_requested_topic": True, "fact_check_before_public_output": True},
         "integrations": {"obsidian": {"enabled": False}},
         "pipeline": {"chunk_size": 5000, "default_batch_size": 10, "max_attempts": 3, "lease_minutes": 120, "runtime_storage": "legacy", "artifact_retention_days": 7},
+        "retrieval": {"engine": "lexical-v1", "default_limit": 10},
         "quality": {
             "template_patterns": [
                 r"任务定义\s*->\s*工具/Skill 封装\s*->\s*权限与数据接入\s*->\s*自动执行\s*->\s*复盘迭代",
@@ -90,6 +91,15 @@ def validate_config(cfg: dict[str, Any]) -> list[dict[str, str]]:
     namespace = pipeline.get("runtime_namespace")
     if namespace is not None and (not isinstance(namespace, str) or not namespace.strip()):
         errors.append({"field": "pipeline.runtime_namespace", "error": "must_be_non_empty_string"})
+    retrieval = cfg.get("retrieval")
+    if retrieval is not None:
+        if not isinstance(retrieval, dict):
+            errors.append({"field": "retrieval", "error": "must_be_object"})
+        else:
+            if retrieval.get("engine") != "lexical-v1":
+                errors.append({"field": "retrieval.engine", "error": "unsupported_engine"})
+            if not isinstance(retrieval.get("default_limit"), int) or retrieval["default_limit"] <= 0:
+                errors.append({"field": "retrieval.default_limit", "error": "must_be_positive_integer"})
     raw_researcher = cfg.get("researcher")
     if raw_researcher is not None and not isinstance(raw_researcher, dict):
         errors.append({"field": "researcher", "error": "must_be_object"})

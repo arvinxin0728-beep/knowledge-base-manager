@@ -10,6 +10,8 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ### Added
 
+- Transactional model-run ledger with prompt/model identity, input/output hashes, durable snapshots, usage metrics, failure records, validation, and commit linkage.
+- Device-local `lexical-v1` retrieval index across the four durable knowledge layers with ranked snippets and line-addressable citations.
 - Multidimensional researcher designs covering identity, scope, sources, process, outputs, capabilities, and governance, with optional editable presets.
 - Executable capability contracts for bundled code, model instructions, and instance-provided adapters.
 - Instance-aware, redacted adapter readiness diagnostics for video and enterprise document connectors.
@@ -19,6 +21,7 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ### Changed
 
+- Pipeline CLI parsing is separated from the transaction engine; legacy direct refinement submission remains compatible while model-run submission is now available.
 - `SKILL.md` now uses progressive disclosure and is reduced below the architecture target while routing detailed rules to references.
 - Researcher manifests store only compact execution plans; shared capability definitions are not duplicated into each workspace.
 - Legacy researcher types are deprecated compatibility aliases; new configurations persist `research_design` schema v2 instead of a nominal type.

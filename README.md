@@ -4,6 +4,8 @@
 
 `v0.8.0` 聚焦研究员系统架构收敛：把研究员身份、范围、来源、过程、输出、能力与治理拆成独立维度，并纳入统一主技能。迁移不改变旧知识库目录、运行状态或正式知识资产。
 
+模型精炼现在可以登记为独立事务运行，记录模型与 prompt 版本、输入输出哈希、本地快照、token、耗时、失败、验证和提交状态。四层长期知识还可以建立设备本地 `lexical-v1` 索引，查询结果返回可定位到文件与行号的引用；当前版本不生成自动回答，也不包含向量或图检索。
+
 研究员初始化支持多维组合预览：preset 只是可覆盖的起点，不是研究员身份或互斥分类。旧 `--profile knowledge|video` 与 `--type` 保持兼容但已弃用；新初始化先运行 `presets`、`capabilities` 和 `plan-init`，再用 `init --preset ...` 组合来源、过程和输出。
 
 企业连接遵循实例隔离边界：主技能只声明通用钉钉、飞书等连接能力；真实 MCP 配置、凭证、节点 ID、企业知识和资料只能保存在对应研究员实例中。发布检查会阻断私有路径和嵌入式连接配置，研究员 `doctor` 会拒绝明文凭证。
@@ -409,6 +411,16 @@ python3 scripts/kb_manager.py validate-config --config /absolute/path/to/AI-Know
 python3 scripts/kb_manager.py doctor --config /absolute/path/to/AI-Knowledge-Base/00-system/kb-config.json
 ```
 
+登记模型精炼运行和查询长期知识：
+
+```bash
+python3 scripts/kb_model.py --config <config> status
+python3 scripts/kb_search.py --config <config> rebuild --apply
+python3 scripts/kb_search.py --config <config> query --query "要研究的问题"
+```
+
+完整的模型事务步骤与返回引用合同见 `references/model-transactions-and-retrieval.md`。
+
 ## 第一次使用
 
 如果你已经有自己的资料目录，需要告诉 Codex 三类路径：
@@ -577,6 +589,8 @@ Karpathy 风格 LLM Wiki 更强调把信息整理成面向 LLM 使用的 Wiki，
 - 支持范围、来源、过程、输出和能力的正交组合，以及可编辑的启动 preset
 - 支持能力执行合同、依赖有序计划和适配器阻断诊断
 - 支持企业连接配置与企业知识的实例隔离和发布泄漏扫描
+- 支持可恢复、可审计的模型运行账本和基于快照的提交
+- 支持四层长期知识的本地关键词检索和行号引用
 
 但它还不是完全成熟的产品级系统：
 
@@ -585,10 +599,11 @@ Karpathy 风格 LLM Wiki 更强调把信息整理成面向 LLM 使用的 Wiki，
 - 输出质量评审需要持续积累标准
 - 不同用户的目录习惯需要更多 profile 示例
 - Codex 之外的平台目前主要通过脚本模式或指令包适配，不保证所有平台开箱即用
+- 当前检索为确定性的 `lexical-v1`，尚无向量、混合或图检索，也不直接生成回答
 
 ## 发布与维护
 
-本项目使用语义版本号。GitHub 当前公开版本为 `v0.7.7`；本地分支已经准备 `v0.8.0` 发布候选，但在完成授权前不推送、不合并、不打标签。`v0.8.0` 保持旧 CLI 和配置兼容，并增加组合式研究员、能力执行合同、岗位赋能类型、适配器就绪诊断和企业隐私边界。
+本项目使用语义版本号。GitHub 当前公开版本为 `v0.7.7`；本地分支正在准备 `v0.8.0`，在完成授权前不推送、不合并、不打标签。`v0.8.0` 保持旧 CLI 和配置兼容，并增加多维研究员、能力执行合同、模型事务账本、引用检索、适配器诊断和企业隐私边界。
 
 发布到 GitHub 前至少运行：
 
