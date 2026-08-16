@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from kbm.domain.capabilities import CAPABILITY_CONTRACTS, execution_plan, validate_capability_catalog
+
 
 CORE_CAPABILITIES = (
     "core.identity", "core.workspace-isolation", "core.transactional-pipeline",
@@ -12,31 +14,8 @@ CORE_CAPABILITIES = (
 )
 
 CAPABILITIES: dict[str, dict[str, Any]] = {
-    "core.identity": {"category": "core", "requires": [], "availability": "available"},
-    "core.workspace-isolation": {"category": "core", "requires": ["core.identity"], "availability": "available"},
-    "core.transactional-pipeline": {"category": "core", "requires": ["core.workspace-isolation"], "availability": "available"},
-    "core.source-traceability": {"category": "core", "requires": ["core.identity"], "availability": "available"},
-    "core.quality-gates": {"category": "core", "requires": ["core.source-traceability"], "availability": "available"},
-    "source.public-account": {"category": "source", "requires": ["core.transactional-pipeline"], "availability": "available"},
-    "source.ebook": {"category": "source", "requires": ["core.transactional-pipeline"], "availability": "available"},
-    "source.video": {"category": "source", "requires": ["core.transactional-pipeline"], "availability": "adapter_required"},
-    "source.transcript": {"category": "source", "requires": ["core.transactional-pipeline"], "availability": "available"},
-    "research.active-reading": {"category": "research", "requires": ["core.source-traceability"], "availability": "available"},
-    "research.topic-synthesis": {"category": "research", "requires": ["research.active-reading"], "availability": "available"},
-    "research.fact-verification": {"category": "research", "requires": ["core.quality-gates"], "availability": "available"},
-    "asset.method": {"category": "asset", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "asset.case": {"category": "asset", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "asset.expression": {"category": "asset", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "asset.framework": {"category": "asset", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "asset.media-clip": {"category": "asset", "requires": ["source.video"], "availability": "adapter_required"},
-    "output.feynman": {"category": "output", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "output.article": {"category": "output", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "output.video-script": {"category": "output", "requires": ["research.topic-synthesis"], "availability": "available"},
-    "output.research-report": {"category": "output", "requires": ["research.fact-verification"], "availability": "available"},
-    "output.decision-memo": {"category": "output", "requires": ["research.fact-verification"], "availability": "available"},
-    "integration.obsidian": {"category": "integration", "requires": ["core.workspace-isolation"], "availability": "available"},
-    "integration.dingtalk": {"category": "integration", "requires": ["core.workspace-isolation"], "availability": "adapter_required", "config_scope": "instance_only"},
-    "integration.feishu": {"category": "integration", "requires": ["core.workspace-isolation"], "availability": "adapter_required", "config_scope": "instance_only"},
+    capability_id: contract.to_dict()
+    for capability_id, contract in CAPABILITY_CONTRACTS.items()
 }
 
 RESEARCHER_TYPES: dict[str, dict[str, Any]] = {
@@ -80,6 +59,7 @@ class ResearcherPlan:
     unavailable: tuple[dict[str, str], ...]
     governance_policy: str
     layout_profile: str
+    execution_steps: tuple[dict[str, Any], ...]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,6 +68,7 @@ class ResearcherPlan:
             "unavailable": list(self.unavailable),
             "governance_policy": self.governance_policy,
             "layout_profile": self.layout_profile,
+            "execution_steps": list(self.execution_steps),
         }
 
 
@@ -111,6 +92,9 @@ def resolve_researcher_plan(
     enable: Iterable[str] = (),
     disable: Iterable[str] = (),
 ) -> ResearcherPlan:
+    catalog_errors = validate_capability_catalog()
+    if catalog_errors:
+        raise ValueError(f"invalid_capability_catalog:{','.join(catalog_errors)}")
     if researcher_type not in RESEARCHER_TYPES:
         raise ValueError(f"unknown_researcher_type:{researcher_type}")
     definition = RESEARCHER_TYPES[researcher_type]
@@ -139,6 +123,7 @@ def resolve_researcher_plan(
         unavailable=unavailable,
         governance_policy=str(definition["governance_policy"]),
         layout_profile="video" if "source.video" in resolved else "knowledge",
+        execution_steps=execution_plan(resolved),
     )
 
 

@@ -108,6 +108,9 @@ def test_new_type_initialization_writes_resolved_manifest() -> None:
         assert "source.video" in config["capabilities"]["enabled"]
         assert config["governance"]["policy"] == "publication-standard"
         assert config["resolved_manifest"]["unavailable"]
+        assert config["resolved_manifest"]["capability_catalog_version"] == 2
+        assert config["resolved_manifest"]["execution_plan"]
+        assert all(set(step) == {"sequence", "id", "status", "entrypoint"} for step in config["resolved_manifest"]["execution_plan"])
 
 
 def test_doctor_rejects_raw_connector_secrets_in_one_researcher_instance() -> None:

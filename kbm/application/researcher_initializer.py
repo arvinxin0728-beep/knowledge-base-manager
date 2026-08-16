@@ -50,8 +50,15 @@ def finalize_researcher_workspace(
     raw["governance"] = {"policy": plan.governance_policy}
     raw["resolved_manifest"] = {
         "schema_version": 1, "researcher_type_version": 1,
-        "capability_catalog_version": 1, "resolved_at": date.today().isoformat(),
+        "capability_catalog_version": 2, "resolved_at": date.today().isoformat(),
         "unavailable": list(plan.unavailable),
+        "execution_plan": [
+            {
+                "sequence": step["sequence"], "id": step["id"],
+                "status": step["status"], "entrypoint": step["entrypoint"],
+            }
+            for step in plan.execution_steps
+        ],
     }
     atomic_write_json(config, raw)
     return raw

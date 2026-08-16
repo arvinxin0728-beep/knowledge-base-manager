@@ -46,3 +46,9 @@ def test_enterprise_connectors_are_generic_instance_only_adapters() -> None:
     assert {item["id"] for item in plan.unavailable} == {"integration.dingtalk", "integration.feishu"}
     assert CAPABILITIES["integration.dingtalk"]["config_scope"] == "instance_only"
     assert CAPABILITIES["integration.feishu"]["config_scope"] == "instance_only"
+    connector_steps = {
+        item["id"]: item for item in plan.execution_steps
+        if item["id"] in {"integration.dingtalk", "integration.feishu"}
+    }
+    assert {item["status"] for item in connector_steps.values()} == {"blocked_adapter_required"}
+    assert all(item["execution_mode"] == "adapter" for item in connector_steps.values())
