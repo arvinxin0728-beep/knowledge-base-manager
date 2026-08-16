@@ -183,6 +183,7 @@ def query(cfg: dict[str, Any], text: str, *, limit: int = 10, layers: Iterable[s
     if not terms:
         raise ValueError("query_has_no_searchable_terms")
     with connect_index(cfg) as db:
+        required_entities = {term for term in terms if len(term) >= 2 and re.fullmatch(r"[a-z0-9_]+", term)}
         selected = tuple(layers)
         if selected:
             placeholders = ",".join("?" for _ in selected)
@@ -199,6 +200,8 @@ def query(cfg: dict[str, Any], text: str, *, limit: int = 10, layers: Iterable[s
         total = max(len(rows), 1)
         ranked = []
         for row, counts, title_terms in row_terms:
+            if required_entities and not required_entities <= (set(counts) | title_terms):
+                continue
             score = 0.0
             for term in terms:
                 if counts[term]:

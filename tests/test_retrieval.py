@@ -100,6 +100,10 @@ def test_navigation_sections_rank_below_substantive_content() -> None:
             "## Related outputs\nOpenClaw knowledge base knowledge base knowledge base links.\n",
             encoding="utf-8",
         )
+        (notes / "generic.md").write_text(
+            "# Generic Knowledge Base\n\n## Core analysis\nKnowledge base knowledge base knowledge base design.\n",
+            encoding="utf-8",
+        )
         config = root / "config.json"
         config.write_text(json.dumps({
             "version": 1, "name": "Navigation Test", "ai_knowledge_base": str(kb), "source_libraries": {},
@@ -109,3 +113,4 @@ def test_navigation_sections_rank_below_substantive_content() -> None:
         search(config, "rebuild", "--apply")
         result = search(config, "query", "--query", "OpenClaw knowledge base")
         assert result["results"][0]["heading"] == "Core analysis"
+        assert all("openclaw" in item["title"].lower() or "openclaw" in item["snippet"].lower() for item in result["results"])
