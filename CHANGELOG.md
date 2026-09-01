@@ -6,7 +6,7 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-08-16
+## [0.8.0] - 2026-09-01
 
 ### Added
 
@@ -18,6 +18,8 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 - Privacy gates that reject embedded connector values, private paths, raw secrets, and enterprise markers in release packages.
 - Cross-dimensional acceptance matrix proving themes, media sources, research processes, audiences, and outputs can be composed independently.
 - Dedicated application modules for evidence intake, source indexing, mechanical output quality, and editorial quality.
+- `quality.essential_aliases` config: a researcher whose refinement template renames a canonical Gate-10 section (for example "核心观点" → "核心知识点") can declare the extra alias instead of forking the check logic.
+- `quality.require_theme_cluster_at_refinement` config: researchers that assign `theme_cluster` during promotion review rather than at initial refinement can opt out of the stricter default without disabling the placeholder-value check.
 
 ### Changed
 
@@ -28,6 +30,10 @@ The format follows Keep a Changelog conventions loosely, and this project uses s
 - Legacy researcher types are deprecated compatibility aliases; new configurations persist `research_design` schema v2 instead of a nominal type.
 - Enterprise integrations are declared as generic `instance_only` adapter capabilities and remain blocked until configured and available.
 - The architecture ratchet for `SKILL.md` is lowered to prevent renewed entrypoint growth.
+
+### Fixed
+
+- `local_runtime_dir` no longer collapses a non-ASCII researcher `name` (for example a Chinese researcher name with no explicit `researcher.id`) to the generic `default-researcher` runtime namespace. That collapse silently orphaned the researcher's existing runtime state (processed index, run log, pipeline lease database) on upgrade and risked colliding with another differently-named non-ASCII researcher. The strict ASCII `slug()` used for `researcher.id` identity/validation is unchanged; only the filesystem-namespace derivation (`path_slug()`) now preserves non-ASCII scripts.
 
 ### Security
 

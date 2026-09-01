@@ -37,6 +37,22 @@ def test_legacy_config_becomes_an_implicit_researcher_without_file_migration() -
         assert local_runtime_dir(loaded).parent.name.startswith("legacy-knowledge-base-")
 
 
+def test_legacy_config_with_non_ascii_name_keeps_a_stable_distinct_runtime_namespace() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        config = root / "legacy.json"
+        original = {"name": "信封的知识管理", "version": 1, "source_libraries": {}, "ai_knowledge_base": str(root / "kb"), "mapping": {"system": "00-system", "source_refinements": "10", "topic_pages": "20", "reusable_assets": "30", "outputs": "40"}}
+        config.write_text(json.dumps(original, ensure_ascii=False), encoding="utf-8")
+        loaded = load_config(config)
+        # The strict ASCII researcher.id used for identity/validation still collapses
+        # a non-ASCII name to a generic placeholder ...
+        assert loaded["researcher"]["id"] == "default-researcher"
+        # ... but the runtime namespace used for on-disk state must not collapse the
+        # same way, or two differently-named non-ASCII researchers would silently
+        # collide/orphan each other's pipeline state.
+        assert local_runtime_dir(loaded).parent.name.startswith("信封的知识管理-")
+
+
 def test_explicit_researcher_contract_is_validated() -> None:
     cfg = {"version": 1, "source_libraries": {}, "ai_knowledge_base": "/tmp/kb", "mapping": {"system": "00", "source_refinements": "10", "topic_pages": "20", "reusable_assets": "30", "outputs": "40"}, "pipeline": {"runtime_storage": "local", "artifact_retention_days": 7}, "researcher": {"id": "Bad ID", "name": "", "domain": "", "role": "assistant", "isolation": "shared", "shared_methods": "all"}}
     fields = {item["field"] for item in validate_config(cfg)}

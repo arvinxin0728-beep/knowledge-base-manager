@@ -31,20 +31,39 @@ REFINEMENT_ESSENTIAL_ALIASES = {
 }
 
 
-def check_refinement(path: Path, known_templates: list[str] | None = None) -> dict[str, Any]:
-    return _check_refinement(path, known_templates, None)
+def check_refinement(path: Path, known_templates: list[str] | None = None, essential_aliases: dict[str, list[str]] | None = None, require_theme_cluster_at_refinement: bool = True) -> dict[str, Any]:
+    return _check_refinement(path, known_templates, None, essential_aliases, require_theme_cluster_at_refinement)
 
 
 BOILERPLATE_TOPICS_DEFAULT = frozenset({"Agent工作流", "Skill设计", "自动化系统", "内容生产", "表达写作", "AI写作"})
 
 
-def _check_refinement(path: Path, known_templates: list[str] | None = None, boilerplate_topics: set[str] | None = None) -> dict[str, Any]:
+def resolve_essential_aliases(quality_cfg: dict[str, Any]) -> dict[str, list[str]]:
+    """Merge a researcher's renamed-section aliases on top of the generic defaults.
+
+    A researcher whose refinement template renames a canonical section (for example
+    "核心观点" -> "核心知识点") only needs to declare the extra alias in
+    ``quality.essential_aliases``; unrelated canonical names and their built-in
+    English aliases keep working unchanged.
+    """
+    merged: dict[str, list[str]] = {key: list(values) for key, values in REFINEMENT_ESSENTIAL_ALIASES.items()}
+    for canonical, extra_aliases in quality_cfg.get("essential_aliases", {}).items():
+        existing = merged.setdefault(canonical, [])
+        for alias in extra_aliases:
+            if alias not in existing:
+                existing.append(alias)
+    return merged
+
+
+def _check_refinement(path: Path, known_templates: list[str] | None = None, boilerplate_topics: set[str] | None = None, essential_aliases: dict[str, list[str]] | None = None, require_theme_cluster_at_refinement: bool = True) -> dict[str, Any]:
     """Run structural and content checks on a single refinement file.
-    
+
     Returns blockers (must-fix) and warnings (informational).
     """
     if boilerplate_topics is None:
         boilerplate_topics = BOILERPLATE_TOPICS_DEFAULT
+    if essential_aliases is None:
+        essential_aliases = REFINEMENT_ESSENTIAL_ALIASES
     blockers: list[str] = []
     warnings: list[str] = []
     try:
@@ -54,9 +73,9 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
 
     meta, body = split_frontmatter(text)
     sections = extract_sections(body)
-    # Normalize English section names to Chinese equivalents
+    # Normalize renamed/English section names to their canonical Chinese equivalents
     _section_normalization = {}
-    for cn, aliases in REFINEMENT_ESSENTIAL_ALIASES.items():
+    for cn, aliases in essential_aliases.items():
         for alias in aliases:
             if alias in sections:
                 _section_normalization[cn] = sections[alias]
@@ -69,20 +88,20 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
     essential = list(REFINEMENT_ESSENTIAL_SECTIONS)
     for section in essential:
         if section not in sections:
-            aliases = REFINEMENT_ESSENTIAL_ALIASES.get(section, [])
+            aliases = essential_aliases.get(section, [])
             if not any(a in sections for a in aliases):
                 blockers.append(f"missing_section: {section}")
 
     # 可复用模型 and 候选提升 are important but may be absent
     for section in ["可复用模型", "候选提升"]:
         if section not in sections:
-            aliases = REFINEMENT_ESSENTIAL_ALIASES.get(section, [])
+            aliases = essential_aliases.get(section, [])
             if not any(a in sections for a in aliases):
                 warnings.append(f"missing_section: {section}")
 
     # 可复用案例 is optional - not every source has one
     if "可复用案例" not in sections:
-        aliases = REFINEMENT_ESSENTIAL_ALIASES.get("可复用案例", [])
+        aliases = essential_aliases.get("可复用案例", [])
         if not any(a in sections for a in aliases):
             warnings.append("missing_section: 可复用案例")
 
@@ -91,9 +110,14 @@ def _check_refinement(path: Path, known_templates: list[str] | None = None, boil
     if isinstance(related, list) and len(related) == 0:
         warnings.append("empty_related_sources")
 
-    # theme_cluster must be a valid, non-placeholder value
+    # theme_cluster must be a valid, non-placeholder value. Some researchers assign
+    # theme_cluster during promotion review rather than at initial refinement time;
+    # for them an empty cluster at gate-10 stage is expected, not a defect — only an
+    # explicit placeholder string is a real error.
     cluster = meta.get("theme_cluster", "")
-    if not cluster or cluster in ("未归类", "未分类"):
+    if not cluster and not require_theme_cluster_at_refinement:
+        warnings.append("missing_theme_cluster: not yet assigned — expected until promotion review runs")
+    elif not cluster or cluster in ("未归类", "未分类"):
         if not cluster and not meta:
             warnings.append("missing_theme_cluster: no frontmatter metadata — add theme_cluster when metadata is available")
         else:
@@ -228,10 +252,12 @@ def gate_10(cfg: dict[str, Any], batch_name: str | None = None, batch_threshold:
         known_templates = quality_cfg.get("template_patterns", KNOWN_TEMPLATE_PATTERNS)
     boilerplate_set = set(quality_cfg.get("boilerplate_topics", list(BOILERPLATE_TOPICS_DEFAULT)))
     batch_threshold = batch_threshold or quality_cfg.get("batch_model_repeat_threshold", 0.3)
+    essential_aliases = resolve_essential_aliases(quality_cfg)
+    require_theme_cluster_at_refinement = quality_cfg.get("require_theme_cluster_at_refinement", True)
 
     results = []
     for f in files:
-        result = _check_refinement(f, known_templates, boilerplate_set)
+        result = _check_refinement(f, known_templates, boilerplate_set, essential_aliases, require_theme_cluster_at_refinement)
         results.append(result)
 
     total = len(results)

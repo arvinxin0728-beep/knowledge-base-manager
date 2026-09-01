@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from kbm.application.refinement_quality import check_refinement, gate_10
+from kbm.application.refinement_quality import check_refinement, gate_10, resolve_essential_aliases
 
 
 VALID_NOTE = """---
@@ -78,7 +78,100 @@ def test_batch_gate_blocks_repeated_model_text() -> None:
         assert result["batch_issues"]
 
 
+RENAMED_SECTIONS_NOTE = VALID_NOTE.replace(
+    "## 文章解决的问题", "## 解决的业务问题"
+).replace(
+    "## 核心观点", "## 核心知识点"
+).replace(
+    "## 可复用模型", "## 可复用销售话术/卖点"
+).replace(
+    "## 可复用案例", "## 可复用客户案例"
+)
+
+
+def test_renamed_sections_fail_without_config_alias() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        note = root / "renamed.md"
+        note.write_text(RENAMED_SECTIONS_NOTE, encoding="utf-8")
+        result = check_refinement(note)
+        assert result["passed"] is False
+        assert any("missing_section" in b for b in result["blockers"])
+
+
+def test_researcher_can_declare_essential_aliases_for_renamed_sections() -> None:
+    quality_cfg = {
+        "essential_aliases": {
+            "文章解决的问题": ["解决的业务问题"],
+            "核心观点": ["核心知识点"],
+            "可复用模型": ["可复用销售话术/卖点"],
+            "可复用案例": ["可复用客户案例"],
+        }
+    }
+    merged = resolve_essential_aliases(quality_cfg)
+    # Built-in English aliases for unrelated canonical names must still be present.
+    assert "Core claims" in merged["核心观点"]
+    assert merged["核心观点"] == ["Core claims", "Core points", "Core argument", "核心知识点"]
+
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        note = root / "renamed.md"
+        note.write_text(RENAMED_SECTIONS_NOTE, encoding="utf-8")
+        result = check_refinement(note, essential_aliases=merged)
+        assert result["passed"] is True
+
+
+def test_empty_theme_cluster_blocks_by_default_when_other_frontmatter_present() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        note = root / "note.md"
+        note.write_text(VALID_NOTE.replace("theme_cluster: 视频研究", "theme_cluster:"), encoding="utf-8")
+        result = check_refinement(note)
+        assert result["passed"] is False
+        assert any("invalid_theme_cluster" in b for b in result["blockers"])
+
+
+def test_researcher_can_defer_theme_cluster_to_promotion_review() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        note = root / "note.md"
+        note.write_text(VALID_NOTE.replace("theme_cluster: 视频研究", "theme_cluster:"), encoding="utf-8")
+        result = check_refinement(note, require_theme_cluster_at_refinement=False)
+        assert result["passed"] is True
+        assert any("missing_theme_cluster" in w for w in result["warnings"])
+
+        refinements = root / "10-来源精炼"
+        refinements.mkdir()
+        note.rename(refinements / "note.md")
+        cfg = config(root)
+        cfg["quality"]["require_theme_cluster_at_refinement"] = False
+        gate_result = gate_10(cfg)
+        assert gate_result["failed_count"] == 0
+
+
+def test_gate_10_reads_essential_aliases_from_config() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        root = Path(raw)
+        refinements = root / "10-来源精炼"
+        refinements.mkdir()
+        (refinements / "one.md").write_text(RENAMED_SECTIONS_NOTE, encoding="utf-8")
+        cfg = config(root)
+        cfg["quality"]["essential_aliases"] = {
+            "文章解决的问题": ["解决的业务问题"],
+            "核心观点": ["核心知识点"],
+            "可复用模型": ["可复用销售话术/卖点"],
+            "可复用案例": ["可复用客户案例"],
+        }
+        result = gate_10(cfg)
+        assert result["failed_count"] == 0
+
+
 if __name__ == "__main__":
     test_single_refinement_contract_passes_and_blocks_placeholders()
     test_batch_gate_blocks_repeated_model_text()
+    test_renamed_sections_fail_without_config_alias()
+    test_researcher_can_declare_essential_aliases_for_renamed_sections()
+    test_empty_theme_cluster_blocks_by_default_when_other_frontmatter_present()
+    test_researcher_can_defer_theme_cluster_to_promotion_review()
+    test_gate_10_reads_essential_aliases_from_config()
     print("ok")

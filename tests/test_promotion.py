@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from kbm.application.promotion import artifact_candidates, cluster_rows, load_cluster_rules
-from kbm.domain.naming import safe_stem
+from kbm.domain.naming import path_slug, safe_stem
 
 
 def test_portable_rules_resolve_from_the_skill_root() -> None:
@@ -45,8 +45,24 @@ def test_safe_stem_remains_portable_after_domain_extraction() -> None:
     assert safe_stem("   ") == "untitled"
 
 
+def test_path_slug_keeps_ascii_names_backward_compatible() -> None:
+    assert path_slug("xiaowang-knowledge-base") == "xiaowang-knowledge-base"
+    assert path_slug("Legacy Knowledge Base") == "legacy-knowledge-base"
+    assert path_slug("   ") == "default-researcher"
+
+
+def test_path_slug_preserves_non_ascii_researcher_names() -> None:
+    assert path_slug("信封的知识管理") == "信封的知识管理"
+    # Two distinct non-ASCII names must not collapse to the same namespace.
+    assert path_slug("客如云知识库") != path_slug("信封的知识管理")
+    # Filesystem-unsafe characters are still stripped/replaced.
+    assert path_slug("信封/知识:管理") == "信封-知识-管理"
+
+
 if __name__ == "__main__":
     test_portable_rules_resolve_from_the_skill_root()
     test_auto_cluster_preserves_five_dimension_scoring_and_candidates()
     test_safe_stem_remains_portable_after_domain_extraction()
+    test_path_slug_keeps_ascii_names_backward_compatible()
+    test_path_slug_preserves_non_ascii_researcher_names()
     print("ok")
